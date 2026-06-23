@@ -318,7 +318,9 @@ export function CompanionTab({ detail }: { detail: ProjectDetail }) {
   );
   const recipes = useAsync(() => api<{ recipes: Recipe[] }>("/api/recipes"), []);
   const [recipe, setRecipe] = useState(c.companion.recipe || "solo");
+  const [companion, setCompanion] = useState({ name: c.companion.name, avatar: c.companion.avatar });
   const [saving, setSaving] = useState("");
+  const [regenerating, setRegenerating] = useState(false);
 
   const choose = async (id: string) => {
     if (id === recipe || saving) return;
@@ -333,15 +335,35 @@ export function CompanionTab({ detail }: { detail: ProjectDetail }) {
     }
   };
 
+  const regenerate = async () => {
+    if (regenerating) return;
+    setRegenerating(true);
+    try {
+      const { config } = await api<{ config: ProjectConfig }>(`/api/projects/${detail.entry.id}/config`, {
+        method: "PATCH",
+        body: JSON.stringify({ regenerateCompanion: true }),
+      });
+      setCompanion({ name: config.companion.name, avatar: config.companion.avatar });
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setRegenerating(false);
+    }
+  };
+
   return (
     <div>
       <div class="card">
         <div class="flex items-center gap-3">
-          <div class="text-4xl leading-none">{c.companion.avatar}</div>
+          <div class="text-4xl leading-none">{companion.avatar}</div>
           <div>
-            <h2 class="text-lg font-semibold">{c.companion.name}</h2>
+            <h2 class="text-lg font-semibold">{companion.name}</h2>
             <div class="text-sm text-zinc-400">Companion for {detail.entry.name}</div>
           </div>
+          <div class="flex-1" />
+          <button class="btn" disabled={regenerating} onClick={regenerate} title="Roll a new name and avatar">
+            {regenerating ? "Regenerating…" : "🎲 Regenerate"}
+          </button>
         </div>
         <div class="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
           <b class="text-zinc-400">Active recipe</b>

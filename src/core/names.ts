@@ -36,3 +36,15 @@ export function generateCompanion(): GeneratedCompanion {
     avatar: pick(AVATARS),
   };
 }
+
+/**
+ * Generate a fresh companion, retrying so the name differs from the current one —
+ * a "regenerate" that hands back the same name reads like nothing happened.
+ */
+export function regenerateCompanion(current?: { name?: string }): GeneratedCompanion {
+  let next = generateCompanion();
+  for (let i = 0; current?.name && next.name === current.name && i < 10; i++) {
+    next = generateCompanion();
+  }
+  return next;
+}

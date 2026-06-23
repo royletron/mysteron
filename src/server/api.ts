@@ -12,6 +12,7 @@ import {
   readDoc,
   updateTicket,
   writeDoc,
+  regenerateCompanion,
   type ProjectConfig,
   type RegistryEntry,
 } from "../core/index.js";
@@ -177,11 +178,12 @@ export function registerApi(
   app.patch("/api/projects/:id/config", async (req: Request, res: Response) => {
     const r = await resolve(req.params.id);
     if (!r) return notFound(res);
-    const { yolo, recipe, allowedTools, disallowedTools } = (req.body ?? {}) as {
+    const { yolo, recipe, allowedTools, disallowedTools, regenerateCompanion: regen } = (req.body ?? {}) as {
       yolo?: boolean;
       recipe?: string;
       allowedTools?: string[];
       disallowedTools?: string[];
+      regenerateCompanion?: boolean;
     };
     const next = { ...r.config };
     if (typeof yolo === "boolean") next.yolo = yolo;
@@ -189,6 +191,7 @@ export function registerApi(
       if (!findRecipe(recipe)) return res.status(400).json({ error: `unknown recipe: ${recipe}` });
       next.companion = { ...next.companion, recipe };
     }
+    if (regen) next.companion = { ...next.companion, ...regenerateCompanion(next.companion) };
     if (Array.isArray(allowedTools)) next.allowedTools = allowedTools.map(String).filter((t) => t.trim());
     if (Array.isArray(disallowedTools)) next.disallowedTools = disallowedTools.map(String).filter((t) => t.trim());
     await saveProjectConfig(r.entry.path, next);

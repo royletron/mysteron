@@ -185,6 +185,10 @@ behaviour**: most recipes keep small discrete commits on the current branch
 while `research` cuts a throwaway `spike/` branch (`new-branch`). The strategy is
 woven into the agent's prompt.
 
+Don't like the companion you were dealt? Hit **🎲 Regenerate** on the Companion
+tab (or `PATCH /api/projects/:id/config { regenerateCompanion: true }`) to roll a
+fresh fun name and avatar. The recipe and other settings are kept.
+
 ## Plugins
 
 Plugins contribute MCP tools. The bundled **usage-monitor** parses Claude Code

@@ -15,6 +15,7 @@ const { readDoc, writeDoc } = await import("../src/core/docs.js");
 const { loadRegistry } = await import("../src/core/registry.js");
 const { usageInWindow } = await import("../src/plugins/usage-monitor/usage.js");
 const { RECIPES, findRecipe, gitInstruction } = await import("../src/core/recipes.js");
+const { generateCompanion, regenerateCompanion } = await import("../src/core/names.js");
 
 const projectRoot = path.join(tmp, "proj");
 
@@ -135,6 +136,19 @@ test("recipes declare git behaviour that drives the agent instructions", () => {
   // new-branch produces branch-cutting instructions using the prefix.
   assert.match(gitInstruction({ strategy: "new-branch", branchPrefix: "spike/" }), /spike\//);
   assert.equal(findRecipe("nope"), undefined);
+});
+
+test("companion can be generated and regenerated to a fresh name", () => {
+  const c = generateCompanion();
+  assert.ok(c.name.includes(" "), "name has an epithet");
+  assert.ok(c.avatar.length > 0, "has an avatar");
+
+  // Regenerating never hands back the same name it was given.
+  for (let i = 0; i < 50; i++) {
+    assert.notEqual(regenerateCompanion(c).name, c.name);
+  }
+  // With no current companion it still produces a valid one.
+  assert.ok(regenerateCompanion().name.includes(" "));
 });
 
 test("usage parser sums tokens within the window", async () => {
