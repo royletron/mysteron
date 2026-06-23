@@ -4,7 +4,7 @@ import { useAsync } from "./hooks";
 import { ErrorBox, Loading } from "./ui";
 import { Board } from "./Board";
 import { TicketPanel } from "./TicketPanel";
-import { DocsTab, MemoryTab, PluginsTab, CompanionTab, CommitsTab } from "./tabs";
+import { DocsTab, MemoryTab, PluginsTab, CompanionTab, CommitsTab, BinTab } from "./tabs";
 import { Avatar } from "./Avatar";
 import type { AppEvent } from "./App";
 
@@ -15,6 +15,7 @@ const TABS: [string, string][] = [
   ["commits", "Commits"],
   ["plugins", "Plugins & usage"],
   ["agent", "Companion"],
+  ["bin", "Bin"],
 ];
 
 export function Project({ projectId, evt }: { projectId: string; evt: AppEvent }) {
@@ -160,6 +161,7 @@ export function Project({ projectId, evt }: { projectId: string; evt: AppEvent }
       {tab === "commits" && <CommitsTab detail={data} />}
       {tab === "plugins" && <PluginsTab detail={data} />}
       {tab === "agent" && <CompanionTab detail={data} />}
+      {tab === "bin" && <BinTab detail={data} reload={reload} />}
 
       {editing && (
         <TicketPanel

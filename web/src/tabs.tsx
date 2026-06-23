@@ -10,6 +10,7 @@ import {
   type ProjectDetail,
   type Recipe,
   type RunSummary,
+  type Ticket,
   type UsageBudget,
 } from "./api";
 import { useAsync } from "./hooks";
@@ -224,6 +225,54 @@ export function MemoryTab({ detail }: { detail: ProjectDetail }) {
           <div class="text-xs text-zinc-500">{m.description || ""}</div>
         </div>
       ))}
+    </div>
+  );
+}
+
+// ---- Bin ----------------------------------------------------------------
+/** Soft-deleted tickets: auto-binned 48h after "done". Restore or delete forever. */
+export function BinTab({ detail, reload }: { detail: ProjectDetail; reload: () => void }) {
+  const projectId = detail.entry.id;
+  const binned = detail.board.bin ?? [];
+
+  const restore = async (t: Ticket) => {
+    await api(`/api/projects/${projectId}/tickets/${t.id}`, { method: "PATCH", body: JSON.stringify({ state: "done" }) });
+    reload();
+  };
+  const remove = async (t: Ticket) => {
+    if (!confirm(`Permanently delete "${t.title}"? This can't be undone.`)) return;
+    await api(`/api/projects/${projectId}/tickets/${t.id}`, { method: "DELETE" });
+    reload();
+  };
+
+  return (
+    <div class="card">
+      <h2 class="text-lg font-semibold">Bin</h2>
+      <p class="text-sm text-zinc-400">
+        Tickets land here automatically 48 hours after they're done. Restore one to bring it back, or delete it for good.
+      </p>
+      {binned.length === 0 ? (
+        <div class="mt-3 text-sm text-zinc-500">The bin is empty.</div>
+      ) : (
+        <div class="mt-3 flex flex-col gap-1.5">
+          {binned.map((t) => (
+            <div key={t.id} class="flex items-center gap-3 rounded-sm border border-zinc-800 px-3 py-2">
+              <div class="min-w-0 flex-1">
+                <div class="truncate text-sm">{t.title}</div>
+                <div class="text-xs text-zinc-500">
+                  binned {fmtWhen(t.updated)} · {t.priority}
+                </div>
+              </div>
+              <button class="btn btn-sm" onClick={() => restore(t)}>
+                ↩ Restore
+              </button>
+              <button class="btn btn-sm btn-danger" onClick={() => remove(t)}>
+                Delete
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

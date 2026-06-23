@@ -10,7 +10,7 @@ process.env.HENSON_HOME = path.join(tmp, "home");
 process.env.CLAUDE_PROJECTS_DIR = path.join(tmp, "claude");
 
 const { initProject, loadProjectConfig } = await import("../src/core/project.js");
-const { createTicket, listTickets, nextTicket, updateTicket, getTicket, deleteTicket, addAttachment, removeAttachment, readAttachment } = await import("../src/core/board.js");
+const { createTicket, listTickets, nextTicket, updateTicket, getTicket, deleteTicket, addAttachment, removeAttachment, readAttachment, binStaleDone } = await import("../src/core/board.js");
 const { readDoc, writeDoc } = await import("../src/core/docs.js");
 const { loadRegistry } = await import("../src/core/registry.js");
 const { usageInWindow } = await import("../src/plugins/usage-monitor/usage.js");
@@ -147,6 +147,17 @@ test("attachments: stored as bytes + frontmatter, de-duped, cleaned up on delete
   await addAttachment(projectRoot, t.id, "again.png", png);
   await deleteTicket(projectRoot, t.id);
   assert.equal(await readAttachment(projectRoot, t.id, "again.png"), undefined);
+});
+
+test("binStaleDone sweeps long-done tickets into the bin", async () => {
+  const t = await createTicket(projectRoot, { title: "finished a while ago", state: "done" });
+  // Nothing is 48h old yet, so the default sweep is a no-op for this ticket.
+  await binStaleDone(projectRoot);
+  assert.equal((await getTicket(projectRoot, t.id))?.state, "done");
+  // A zero-age threshold treats any done ticket as stale → moved to the bin.
+  const moved = await binStaleDone(projectRoot, 0);
+  assert.ok(moved >= 1);
+  assert.equal((await getTicket(projectRoot, t.id))?.state, "bin");
 });
 
 test("docs round-trip with path-traversal guard", async () => {

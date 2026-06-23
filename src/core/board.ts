@@ -222,6 +222,24 @@ export async function readAttachment(
   }
 }
 
+/** Default age after which a "done" ticket is swept into the bin. */
+export const BIN_AFTER_MS = 48 * 60 * 60 * 1000;
+
+/** Move tickets that have sat in "done" longer than maxAgeMs into the bin.
+ *  Returns how many were moved. */
+export async function binStaleDone(projectRoot: string, maxAgeMs = BIN_AFTER_MS): Promise<number> {
+  const cutoff = Date.now() - maxAgeMs;
+  const done = await listTickets(projectRoot, { state: "done" });
+  let moved = 0;
+  for (const t of done) {
+    if (Date.parse(t.updated) <= cutoff) {
+      await updateTicket(projectRoot, t.id, { state: "bin" });
+      moved++;
+    }
+  }
+  return moved;
+}
+
 /**
  * Pull the next actionable ticket: the highest-priority ticket in "ready",
  * optionally moving it to "in-progress" and assigning it.

@@ -6,9 +6,14 @@ export const TICKET_STATES = [
   "in-progress",
   "review",
   "done",
+  "bin",
 ] as const;
 
 export type TicketState = (typeof TICKET_STATES)[number];
+
+/** States shown as columns on the board. "bin" is a soft-delete holding area
+ *  surfaced on its own tab, not a board column. */
+export const BOARD_STATES: TicketState[] = ["backlog", "ready", "in-progress", "review", "done"];
 
 export const TICKET_PRIORITIES = ["low", "medium", "high"] as const;
 export type TicketPriority = (typeof TICKET_PRIORITIES)[number];

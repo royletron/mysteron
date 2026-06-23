@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { ProjectWatcher } from "../core/watcher.js";
 import { bus, type RunEvent } from "../core/events.js";
+import { binStaleDone } from "../core/board.js";
 import { loadRegistry } from "../core/registry.js";
 import { RunManager } from "../runner/manager.js";
 import { Autopilot } from "../runner/autopilot.js";
@@ -45,6 +46,22 @@ export async function serve(opts: ServeOptions = {}): Promise<{ port: number; cl
   if (verbose && loaded) console.log(`[henson] loaded ${loaded} persisted run(s)`);
   const autopilot = new Autopilot(runs);
 
+  // Sweep tickets that have sat in "done" for 48h into the bin — now and hourly.
+  const sweepBins = async () => {
+    const reg = await loadRegistry();
+    for (const p of reg.projects) {
+      try {
+        const moved = await binStaleDone(p.path);
+        if (moved) bus.emitEvent({ type: "board-changed", projectId: p.id });
+      } catch {
+        /* one bad project must not stop the sweep */
+      }
+    }
+  };
+  void sweepBins();
+  const binTimer = setInterval(() => void sweepBins(), 60 * 60 * 1000);
+  binTimer.unref?.();
+
   if (verbose) {
     bus.on("henson", (e) => console.log("[henson] event", e));
     bus.on("autopilot", (e) => console.log("[henson] autopilot", e));
@@ -77,6 +94,7 @@ export async function serve(opts: ServeOptions = {}): Promise<{ port: number; cl
       resolveServer({
         port,
         close: async () => {
+          clearInterval(binTimer);
           await watcher.stop();
           await new Promise<void>((r) => server.close(() => r()));
         },

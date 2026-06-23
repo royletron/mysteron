@@ -27,7 +27,7 @@ import {
 import { findEntry, loadRegistry, unregisterProject } from "../core/registry.js";
 import { initProject, saveProjectConfig } from "../core/project.js";
 import { RECIPES, findRecipe } from "../core/recipes.js";
-import { TICKET_STATES } from "../core/types.js";
+import { BOARD_STATES, TICKET_STATES } from "../core/types.js";
 import { allPlugins, enabledPlugins } from "../plugins/manager.js";
 import { usageMonitorPlugin } from "../plugins/usage-monitor/index.js";
 import type { ProjectWatcher } from "../core/watcher.js";
@@ -173,7 +173,7 @@ export function registerApi(
       entry: r.entry,
       config: r.config,
       board,
-      states: TICKET_STATES,
+      states: BOARD_STATES,
       docs: await listDocs(r.entry.path),
       memories: await listMemories(r.entry.path),
       pendingDocSync: watcher.pendingSyncs().some((p) => p.projectId === r.entry.id),

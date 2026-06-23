@@ -1,7 +1,7 @@
 // API client + shared types for the Henson web UI. Types mirror the server's
 // JSON responses (see src/server/api.ts).
 
-export type TicketState = "backlog" | "ready" | "in-progress" | "review" | "done";
+export type TicketState = "backlog" | "ready" | "in-progress" | "review" | "done" | "bin";
 export type TicketPriority = "low" | "medium" | "high";
 
 export interface Ticket {
@@ -183,6 +183,7 @@ export const STATE_LABELS: Record<TicketState, string> = {
   "in-progress": "In progress",
   review: "Review",
   done: "Done",
+  bin: "Bin",
 };
 
 type StatusInfo = { label: string; color: string; live?: boolean };
