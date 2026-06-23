@@ -11,7 +11,7 @@ import {
   type Ticket,
 } from "./api";
 import { useAsync, useRunStream } from "./hooks";
-import { ErrorBox, Loading } from "./ui";
+import { ErrorBox, LiveDot, Loading } from "./ui";
 import { Avatar } from "./Avatar";
 import type { AppEvent } from "./App";
 
@@ -153,7 +153,11 @@ export function TicketPage({
         <a href={`#/project/${projectId}`} class="btn btn-ghost btn-sm">
           ← board
         </a>
-        {lead ? <Avatar companion={lead} size={34} /> : null}
+        {lead ? (
+          <span class={active ? "pulse-ring" : ""}>
+            <Avatar companion={lead} size={34} />
+          </span>
+        ) : null}
         <div>
           <h1 class="text-xl font-semibold">{ticket.title}</h1>
           <div class="text-sm text-zinc-400">
@@ -162,7 +166,10 @@ export function TicketPage({
           </div>
         </div>
         <div class="flex-1" />
-        <span class={`pill ${statusInfo?.color ?? "text-zinc-500"}`}>{statusInfo?.label ?? "idle"}</span>
+        <span class={`pill gap-1.5 ${statusInfo?.color ?? "text-zinc-500"}`}>
+          {statusInfo?.live && <LiveDot />}
+          {statusInfo?.label ?? "idle"}
+        </span>
       </div>
 
       <div class="grid grid-cols-[minmax(280px,360px)_1fr] items-start gap-4">
@@ -177,7 +184,8 @@ export function TicketPage({
                 ▶ Run agent
               </button>
             )}
-            <span class="text-sm text-zinc-500">
+            <span class="inline-flex items-center gap-1.5 text-sm text-zinc-500">
+              {active && <LiveDot class="text-amber-400" />}
               {active ? "Agent is working…" : "Press Run to start the companion."}
             </span>
           </div>
@@ -211,7 +219,10 @@ export function TicketPage({
                       : "border-zinc-800 text-zinc-400 hover:border-zinc-600"
                   }`}
                 >
-                  <span class={RUN_STATUS[r.status]?.color}>{RUN_STATUS[r.status]?.label || r.status}</span>
+                  <span class={`inline-flex items-center gap-1.5 ${RUN_STATUS[r.status]?.color}`}>
+                    {RUN_STATUS[r.status]?.live && <LiveDot />}
+                    {RUN_STATUS[r.status]?.label || r.status}
+                  </span>
                   <span class="text-zinc-500">
                     {fmtWhen(r.startedAt)}
                     {runDuration(r) ? ` · ${runDuration(r)}` : ""}

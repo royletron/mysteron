@@ -4,6 +4,7 @@ import { Home } from "./Home";
 import { Project } from "./Project";
 import { TicketPage } from "./TicketPage";
 import { Avatar } from "./Avatar";
+import { LiveDot } from "./ui";
 
 export interface AppEvent {
   seq: number;
@@ -29,10 +30,10 @@ export function App() {
         </a>
         <span class="text-sm italic text-zinc-500">puppeteering your agents</span>
         <span
-          class={`ml-auto text-xs ${connected ? "text-emerald-400" : "text-zinc-600"}`}
+          class={`ml-auto inline-flex items-center text-xs ${connected ? "text-emerald-400" : "text-zinc-600"}`}
           title="live updates"
         >
-          ●
+          {connected ? <LiveDot /> : <span class="inline-block h-2 w-2 rounded-full bg-current" />}
         </span>
       </header>
 

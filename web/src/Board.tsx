@@ -11,6 +11,7 @@ import {
 } from "./api";
 import { TicketPanel } from "./TicketPanel";
 import { Avatar } from "./Avatar";
+import { LiveDot } from "./ui";
 import type { AppEvent } from "./App";
 
 function runTicketUrl(projectId: string, ticketId: string): string {
@@ -131,14 +132,17 @@ function TicketCard({
             if (!busy) window.open(runTicketUrl(projectId, t.id), "_blank");
           }}
         >
-          {busy ? "●" : "▶"}
+          {busy ? <LiveDot /> : "▶"}
         </button>
       </div>
       <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
         <span class="tag">{t.priority}</span>
         {companion ? (
           <span class="tag inline-flex items-center gap-1">
-            <Avatar companion={companion} size={14} /> {companion.name}
+            <span class={busy ? "pulse-ring" : ""}>
+              <Avatar companion={companion} size={14} />
+            </span>{" "}
+            {companion.name}
           </span>
         ) : t.assignee ? (
           <span class="tag">@{t.assignee}</span>
@@ -174,7 +178,12 @@ function AutopilotBar({ detail, reload }: { detail: ProjectDetail; reload: () =>
       <div class="flex items-center gap-2">
         <span>🤖</span>
         <b>Autopilot</b>
-        {active && <span class={`pill ${s.color}`}>{s.label}</span>}
+        {active && (
+          <span class={`pill gap-1.5 ${s.color}`}>
+            {s.live && <LiveDot />}
+            {s.label}
+          </span>
+        )}
         <div class="flex-1" />
         {active && <span class="text-sm text-zinc-500">{ap.completed || 0} done this session</span>}
         {active ? (

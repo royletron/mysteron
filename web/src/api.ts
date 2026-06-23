@@ -188,15 +188,17 @@ export const PRIORITY_BORDER: Record<TicketPriority, string> = {
   low: "border-l-zinc-500",
 };
 
-export const RUN_STATUS: Record<RunStatus, { label: string; color: string }> = {
-  running: { label: "● running", color: "text-amber-400" },
+type StatusInfo = { label: string; color: string; live?: boolean };
+
+export const RUN_STATUS: Record<RunStatus, StatusInfo> = {
+  running: { label: "running", color: "text-amber-400", live: true },
   done: { label: "✓ done", color: "text-emerald-400" },
   failed: { label: "✖ failed", color: "text-red-400" },
   stopped: { label: "■ stopped", color: "text-zinc-400" },
 };
 
-export const AP_STATUS: Record<AutopilotStatus, { label: string; color: string }> = {
-  running: { label: "● running", color: "text-emerald-400" },
+export const AP_STATUS: Record<AutopilotStatus, StatusInfo> = {
+  running: { label: "running", color: "text-emerald-400", live: true },
   paused: { label: "❚❚ paused", color: "text-amber-400" },
   idle: { label: "○ idle", color: "text-cyan-400" },
   stopped: { label: "stopped", color: "text-zinc-400" },

@@ -16,7 +16,7 @@ import { useAsync } from "./hooks";
 import { Markdown } from "./Markdown";
 import { CodeEditor } from "./CodeEditor";
 import { Avatar } from "./Avatar";
-import { Modal } from "./ui";
+import { LiveDot, Modal } from "./ui";
 
 type DocMode = "preview" | "split" | "edit";
 
@@ -244,7 +244,7 @@ export function PluginsTab({ detail }: { detail: ProjectDetail }) {
   return (
     <div>
       <div class="card">
-        {usage.loading && <div class="text-sm text-zinc-500">Loading usage…</div>}
+        {usage.loading && <div class="pulse text-sm text-zinc-500">Loading usage…</div>}
         {u && !u.enabled && <div class="text-sm text-zinc-500">Usage monitor plugin is not enabled for this project.</div>}
         {u && u.enabled && (
           <>
@@ -432,7 +432,7 @@ export function CommitsTab({ detail }: { detail: ProjectDetail }) {
         Recent git history. Commits a companion made carry a <code>Henson-Companion</code> trailer and show their avatar.
       </p>
       {loading && !data ? (
-        <div class="mt-2 text-sm text-zinc-500">Loading…</div>
+        <div class="pulse mt-2 text-sm text-zinc-500">Loading…</div>
       ) : commits.length === 0 ? (
         <div class="mt-2 text-sm text-zinc-500">No commits yet (or this project isn't a git repo).</div>
       ) : (
@@ -514,16 +514,18 @@ function CompanionRow({
   return (
     <div class="rounded-lg border border-zinc-800 p-2.5">
       <div class="flex items-center gap-3">
-        <Avatar companion={companion} size={34} />
+        <span class={activeRun ? "pulse-ring" : ""}>
+          <Avatar companion={companion} size={34} />
+        </span>
         <div>
           <div class="font-medium">{companion.name}</div>
           {activeRun ? (
             <a
-              class="text-xs text-emerald-400"
+              class="inline-flex items-center gap-1.5 text-xs text-emerald-400"
               href={`#/project/${projectId}/ticket/${activeRun.ticketId}`}
               title="See what they're doing"
             >
-              ● working: {activeRun.ticketTitle} — view live →
+              <LiveDot /> working: {activeRun.ticketTitle} — view live →
             </a>
           ) : (
             <div class="text-xs text-zinc-500">{companion.role} · idle</div>

@@ -14,7 +14,12 @@ export function Modal({ children, onClose }: { children: ComponentChildren; onCl
 }
 
 export function Loading({ what }: { what?: string }) {
-  return <div class="p-10 text-center text-zinc-500">{what ?? "Loading…"}</div>;
+  return <div class="pulse p-10 text-center text-zinc-500">{what ?? "Loading…"}</div>;
+}
+
+/** A pulsing dot marking a live/running state. Inherits the current text colour. */
+export function LiveDot({ class: className = "" }: { class?: string }) {
+  return <span class={`live-dot ${className}`} aria-hidden="true" />;
 }
 
 export function ErrorBox({ message }: { message: string }) {

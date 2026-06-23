@@ -13,6 +13,7 @@ import {
   type TicketState,
 } from "./api";
 import { useAsync } from "./hooks";
+import { LiveDot } from "./ui";
 import type { AppEvent } from "./App";
 
 /** Absolute URL to a ticket's agent view, optionally autostarting a run. */
@@ -204,11 +205,17 @@ function AgentHistory({ projectId, ticketId, evt }: { projectId: string; ticketI
           rel="noopener noreferrer"
           title={active ? "An agent is already working — open the live view" : "Run an agent on this ticket"}
         >
-          {active ? "● view live" : "▶ Run agent"}
+          {active ? (
+            <>
+              <LiveDot /> view live
+            </>
+          ) : (
+            "▶ Run agent"
+          )}
         </a>
       </div>
       {loading && !data ? (
-        <div class="text-sm text-zinc-500">Loading…</div>
+        <div class="pulse text-sm text-zinc-500">Loading…</div>
       ) : runs.length === 0 ? (
         <div class="text-sm text-zinc-500">No agent runs yet. Press “Run agent” to start the companion.</div>
       ) : (
@@ -225,7 +232,10 @@ function AgentHistory({ projectId, ticketId, evt }: { projectId: string; ticketI
                 title={r.command}
                 class="flex items-center justify-between gap-2 rounded-sm border border-zinc-800 px-2.5 py-1.5 text-xs text-zinc-400 hover:border-violet-500"
               >
-                <span class={s?.color}>{s?.label || r.status}</span>
+                <span class={`inline-flex items-center gap-1.5 ${s?.color}`}>
+                  {s?.live && <LiveDot />}
+                  {s?.label || r.status}
+                </span>
                 <span class="flex items-center gap-2 text-zinc-500">
                   <span>{r.companion}</span>
                   <span>·</span>
