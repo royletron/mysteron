@@ -1,6 +1,7 @@
-import { useMemo } from "preact/hooks";
+import { useEffect, useMemo, useRef } from "preact/hooks";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
+import Prism from "./highlight";
 
 marked.setOptions({ gfm: true, breaks: false });
 
@@ -22,14 +23,25 @@ const PROSE =
 
 /** Renders markdown to sanitized HTML with nice typography. */
 export function Markdown({ source }: { source: string }) {
+  const ref = useRef<HTMLDivElement>(null);
   const html = useMemo(() => {
     const raw = marked.parse(source, { async: false }) as string;
     return DOMPurify.sanitize(raw);
   }, [source]);
 
+  useEffect(() => {
+    if (ref.current) {
+      try {
+        Prism.highlightAllUnder(ref.current);
+      } catch {
+        /* never let highlighting break rendering */
+      }
+    }
+  }, [html]);
+
   if (!source.trim()) {
     return <div class="text-sm text-zinc-500">This document is empty.</div>;
   }
   // eslint-disable-next-line react/no-danger
-  return <div class={PROSE} dangerouslySetInnerHTML={{ __html: html }} />;
+  return <div ref={ref} class={PROSE} dangerouslySetInnerHTML={{ __html: html }} />;
 }

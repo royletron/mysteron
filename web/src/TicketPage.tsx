@@ -12,6 +12,7 @@ import {
 import { useAsync, useRunStream } from "./hooks";
 import { ErrorBox, LiveDot, Loading, RunTimer } from "./ui";
 import { Avatar } from "./Avatar";
+import { AgentLog } from "./AgentLog";
 import type { AppEvent } from "./App";
 
 interface TicketData {
@@ -231,20 +232,17 @@ export function TicketPage({
 
         <div class="card">
           <div class="mb-1.5 text-xs text-zinc-500">Live agent output</div>
-          <div class="min-h-[52vh] rounded-sm border border-zinc-800 bg-black/70 p-3 font-mono text-xs leading-relaxed">
+          <div class="min-h-[52vh] rounded-sm border border-zinc-800 bg-black/70 p-3">
             {selectedRun && selectedRun.logAvailable === false ? (
-              <div class="text-zinc-400">
+              <div class="font-mono text-xs text-zinc-400">
                 🖥 This run was performed by {selectedRun.companion} on{" "}
                 <span class="text-zinc-200">{selectedRun.hostname}</span>. Its logs are local to that machine —
                 only the run record syncs via git.
               </div>
+            ) : lines.length === 0 ? (
+              <div class="font-mono text-xs text-zinc-600">Waiting for the agent…</div>
             ) : (
-              <>
-                {lines.length === 0 && <div class="text-zinc-600">Waiting for the agent…</div>}
-                {lines.map((l, i) => (
-                  <LogLine key={i} stream={l.stream} text={l.text} />
-                ))}
-              </>
+              <AgentLog lines={lines} />
             )}
           </div>
         </div>
@@ -253,19 +251,4 @@ export function TicketPage({
   );
 }
 
-/** A single agent-log line, coloured by stream and the event prefix we render. */
-function LogLine({ stream, text }: { stream: RunLine["stream"]; text: string }) {
-  const head = text.trimStart();
-  let cls = "text-zinc-100"; // assistant / result text
-  if (stream === "stderr") cls = "text-red-400";
-  else if (stream === "system") {
-    if (head.startsWith("→")) cls = "text-violet-300"; // tool call
-    else if (head.startsWith("←")) cls = "text-zinc-500"; // tool result
-    else if (head.startsWith("✓")) cls = "text-emerald-400"; // result
-    else if (head.startsWith("✖")) cls = "text-red-400"; // error
-    else if (head.startsWith("▶") || head.startsWith("cwd:") || head.startsWith("■")) cls = "text-zinc-500"; // run control
-    else cls = "text-cyan-400"; // session / other system
-  }
-  return <div class={`whitespace-pre-wrap break-words ${cls}`}>{text === "" ? " " : text}</div>;
-}
 

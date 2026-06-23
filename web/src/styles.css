@@ -163,3 +163,50 @@
 .md-hl .token.punctuation {
   color: #71717a;
 }
+
+/* Prism token colours for code blocks (the <Code> component and markdown fences),
+   palette-aligned. Scoped low with :where() so prose styles still win where needed. */
+:where(.code-hl, .prose code[class*="language-"]) {
+  color: #e4e4e7;
+}
+:where(.code-hl, .prose code[class*="language-"]) .token.comment,
+:where(.code-hl, .prose code[class*="language-"]) .token.prolog,
+:where(.code-hl, .prose code[class*="language-"]) .token.cdata {
+  color: #71717a;
+  font-style: italic;
+}
+:where(.code-hl, .prose code[class*="language-"]) .token.punctuation {
+  color: #a1a1aa;
+}
+:where(.code-hl, .prose code[class*="language-"]) .token.keyword,
+:where(.code-hl, .prose code[class*="language-"]) .token.atrule,
+:where(.code-hl, .prose code[class*="language-"]) .token.important {
+  color: #b98cff;
+}
+:where(.code-hl, .prose code[class*="language-"]) .token.string,
+:where(.code-hl, .prose code[class*="language-"]) .token.char,
+:where(.code-hl, .prose code[class*="language-"]) .token.attr-value,
+:where(.code-hl, .prose code[class*="language-"]) .token.inserted {
+  color: #6ee7b7;
+}
+:where(.code-hl, .prose code[class*="language-"]) .token.number,
+:where(.code-hl, .prose code[class*="language-"]) .token.boolean,
+:where(.code-hl, .prose code[class*="language-"]) .token.constant,
+:where(.code-hl, .prose code[class*="language-"]) .token.symbol,
+:where(.code-hl, .prose code[class*="language-"]) .token.property,
+:where(.code-hl, .prose code[class*="language-"]) .token.attr-name {
+  color: #ffd454;
+}
+:where(.code-hl, .prose code[class*="language-"]) .token.function,
+:where(.code-hl, .prose code[class*="language-"]) .token.class-name,
+:where(.code-hl, .prose code[class*="language-"]) .token.tag {
+  color: #ff7aa6;
+}
+:where(.code-hl, .prose code[class*="language-"]) .token.operator,
+:where(.code-hl, .prose code[class*="language-"]) .token.url,
+:where(.code-hl, .prose code[class*="language-"]) .token.variable {
+  color: #d4d4d8;
+}
+:where(.code-hl, .prose code[class*="language-"]) .token.deleted {
+  color: #fca5a5;
+}

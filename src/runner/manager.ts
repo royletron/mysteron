@@ -198,7 +198,7 @@ export function renderStreamEvent(obj: unknown): RenderedLine[] {
         if (b.type === "tool_result") {
           const c = b.content;
           const text = typeof c === "string" ? c : Array.isArray(c) ? c.map((x: any) => x?.text ?? "").join("") : "";
-          push("system", `  ← ${truncate(text.replace(/\s+/g, " ").trim(), 200)}`);
+          push("system", `  ← ${truncate(text.trim(), 1500)}`);
         }
       }
       break;

@@ -92,12 +92,12 @@ test("renderStreamEvent turns Claude stream-json into readable lines", () => {
   assert.equal(asst[1].stream, "system");
   assert.match(asst[1].text, /→ Edit web\/src\/App\.tsx/);
 
-  // Tool result.
+  // Tool result — formatting (newlines) is preserved so code stays readable in the log.
   const res = renderStreamEvent({
     type: "user",
     message: { content: [{ type: "tool_result", content: "ok\n done" }] },
   });
-  assert.match(res[0].text, /← ok done/);
+  assert.match(res[0].text, /← ok\n done/);
 
   // Final result with cost.
   const fin = renderStreamEvent({ type: "result", subtype: "success", num_turns: 4, total_cost_usd: 0.1234 });
