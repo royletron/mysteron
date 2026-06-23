@@ -32,6 +32,10 @@ export interface Run {
   startedAt: string;
   endedAt?: string;
   exitCode?: number | null;
+  /** Total cost in USD, from Claude Code's final result event (when reported). */
+  costUsd?: number;
+  /** Number of agent turns the run took (from the result event). */
+  numTurns?: number;
   /** Whether the verbose log is available on this machine (logs are local-only). */
   logAvailable: boolean;
   lines: RunLine[];
@@ -511,6 +515,11 @@ export class RunManager {
         } catch {
           this.append(run, "stdout", raw); // not JSON — show as-is
           return;
+        }
+        const e = obj as Record<string, unknown>;
+        if (e?.type === "result") {
+          if (typeof e.total_cost_usd === "number") run.costUsd = e.total_cost_usd;
+          if (typeof e.num_turns === "number") run.numTurns = e.num_turns;
         }
         for (const r of renderStreamEvent(obj)) this.append(run, r.stream, r.text);
       } else {

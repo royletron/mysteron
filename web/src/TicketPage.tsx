@@ -2,6 +2,7 @@ import { useEffect, useState } from "preact/hooks";
 import {
   RUN_STATUS,
   api,
+  fmtCost,
   fmtWhen,
   type ProjectDetail,
   type RunLine,
@@ -180,6 +181,11 @@ export function TicketPage({
               {statusInfo?.label ?? "idle"}
             </span>
             {timerRun && <RunTimer run={timerRun} class="text-sm text-zinc-400" />}
+            {timerRun?.costUsd != null && (
+              <span class="text-sm text-zinc-400" title={timerRun.numTurns != null ? `${timerRun.numTurns} turns` : undefined}>
+                {fmtCost(timerRun.costUsd)}
+              </span>
+            )}
             <div class="flex-1" />
             {active ? (
               <button class="btn btn-danger" title="Stop agent" onClick={stopRun}>
@@ -228,6 +234,7 @@ export function TicketPage({
                   <span class="text-zinc-500">
                     {fmtWhen(r.startedAt)}
                     <RunTimer run={r} prefix=" · " />
+                    {r.costUsd != null && ` · ${fmtCost(r.costUsd)}`}
                   </span>
                 </button>
               ))}

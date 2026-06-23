@@ -4,6 +4,7 @@ import {
   RUN_STATUS,
   STATE_LABELS,
   api,
+  fmtCost,
   fmtWhen,
   type Companion,
   type RunSummary,
@@ -328,6 +329,7 @@ function AgentHistory({ projectId, ticketId, evt }: { projectId: string; ticketI
                   <span>·</span>
                   <span>{fmtWhen(r.startedAt)}</span>
                   <RunTimer run={r} prefix="· " />
+                  {r.costUsd != null && <span title={r.numTurns != null ? `${r.numTurns} turns` : undefined}>· {fmtCost(r.costUsd)}</span>}
                   {r.logAvailable === false && <span title={`Ran on ${r.hostname}; logs are local to that machine`}>🖥 {r.hostname}</span>}
                 </span>
               </a>

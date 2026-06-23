@@ -110,6 +110,8 @@ export interface RunSummary {
   startedAt: string;
   endedAt?: string;
   exitCode?: number | null;
+  costUsd?: number;
+  numTurns?: number;
   logAvailable?: boolean;
   lineCount: number;
 }
@@ -204,6 +206,12 @@ export function fmtNum(n: number | undefined): string {
 }
 export function fmtBytes(n: number): string {
   return n < 1024 ? `${n} B` : `${(n / 1024).toFixed(1)} KB`;
+}
+
+/** A run's cost, e.g. "$0.12" (or "$0.0034" for sub-cent runs). "" when unknown. */
+export function fmtCost(n: number | undefined): string {
+  if (typeof n !== "number") return "";
+  return n >= 0.01 ? `$${n.toFixed(2)}` : `$${n.toFixed(4)}`;
 }
 
 /** "14:32:10" for timestamps from today, otherwise "23 Jun, 14:32". */
