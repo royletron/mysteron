@@ -26,11 +26,13 @@ export function TicketPage({
   ticketId,
   autostart,
   evt,
+  onTitle,
 }: {
   projectId: string;
   ticketId: string;
   autostart: boolean;
   evt: AppEvent;
+  onTitle?: (title: string) => void;
 }) {
   const [refresh, setRefresh] = useState(0);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
@@ -88,6 +90,12 @@ export function TicketPage({
       setRefresh((n) => n + 1);
     },
   });
+
+  // Report the ticket title up to the navbar breadcrumb once it's known.
+  useEffect(() => {
+    if (data?.ticket?.title) onTitle?.(data.ticket.title);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data?.ticket?.title]);
 
   // Autoscroll the page to follow new output when already near the bottom.
   useEffect(() => {

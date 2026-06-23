@@ -1,5 +1,6 @@
-import { useState } from "preact/hooks";
-import { useGlobalEvents, useHashRoute } from "./hooks";
+import { useEffect, useState } from "preact/hooks";
+import { useAsync, useGlobalEvents, useHashRoute, navigate } from "./hooks";
+import { api, type ProjectListItem } from "./api";
 import { Home } from "./Home";
 import { Project } from "./Project";
 import { TicketPage } from "./TicketPage";
@@ -14,6 +15,7 @@ export interface AppEvent {
 export function App() {
   const route = useHashRoute();
   const [evt, setEvt] = useState<AppEvent>({ seq: 0 });
+  const [ticketTitle, setTicketTitle] = useState<string>();
   // The ticket live-view tab only needs its run stream, so it holds no global
   // connection — keeps each tab to a single SSE socket (browsers cap ~6/origin).
   const connected = useGlobalEvents(
@@ -21,16 +23,66 @@ export function App() {
     route.name !== "ticket",
   );
 
+  const { data } = useAsync(() => api<{ projects: ProjectListItem[] }>("/api/projects"), [evt.seq]);
+  const projects = data?.projects ?? [];
+  const current = route.projectId ? projects.find((p) => p.id === route.projectId) : undefined;
+
+  useEffect(() => {
+    if (route.name !== "ticket") setTicketTitle(undefined);
+  }, [route.name, route.ticketId]);
+
   return (
     <div>
-      <header class="sticky top-0 z-10 flex items-center gap-3 border-b border-zinc-800 bg-zinc-950/80 px-6 py-3 backdrop-blur">
+      <header class="sticky top-0 z-10 flex items-center gap-2 border-b border-zinc-800 bg-zinc-950/80 px-6 py-3 backdrop-blur">
         <a href="#/" class="flex items-center gap-2">
           <Avatar seed="Henson" variant="marble" size={26} />
           <span class="text-xl font-bold tracking-wide">Henson</span>
         </a>
-        <span class="text-sm italic text-zinc-500">puppeteering your agents</span>
+        {route.name === "home" ? (
+          <span class="text-sm italic text-zinc-500">puppeteering your agents</span>
+        ) : (
+          <>
+            {current && (
+              <>
+                <span class="text-zinc-600">/</span>
+                <a href={`#/project/${current.id}`} class="text-sm text-zinc-200 hover:text-violet-300">
+                  {current.name}
+                </a>
+              </>
+            )}
+            {route.name === "ticket" && (
+              <>
+                <span class="text-zinc-600">/</span>
+                <span class="truncate text-sm text-zinc-400">{ticketTitle ?? "Ticket"}</span>
+              </>
+            )}
+          </>
+        )}
+
+        <div class="flex-1" />
+
+        {projects.length > 0 && (
+          <select
+            class="max-w-[200px] rounded-sm border border-zinc-800 bg-zinc-950 px-2 py-1 text-sm text-zinc-300 outline-none hover:border-violet-500 focus:border-violet-500"
+            value={route.projectId ?? ""}
+            onChange={(e) => {
+              const id = (e.target as HTMLSelectElement).value;
+              if (id) navigate(`#/project/${id}`);
+            }}
+          >
+            <option value="" disabled>
+              Switch project…
+            </option>
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        )}
+
         <span
-          class={`ml-auto inline-flex items-center text-xs ${connected ? "text-emerald-400" : "text-zinc-600"}`}
+          class={`inline-flex items-center text-xs ${connected ? "text-emerald-400" : "text-zinc-600"}`}
           title="live updates"
         >
           {connected ? <LiveDot /> : <span class="inline-block h-2 w-2 rounded-full bg-current" />}
@@ -49,6 +101,7 @@ export function App() {
             ticketId={route.ticketId}
             autostart={route.autostart ?? false}
             evt={evt}
+            onTitle={setTicketTitle}
           />
         )}
       </main>
