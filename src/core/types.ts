@@ -27,6 +27,8 @@ export interface Ticket {
   updated: string;
   /** Markdown description / acceptance criteria. */
   body: string;
+  /** Filenames of image attachments, stored under board/attachments/<id>. */
+  attachments?: string[];
 }
 
 /**

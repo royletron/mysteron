@@ -165,6 +165,13 @@ test("buildPrompt embeds the recipe's git behaviour and team", () => {
 
   // An unknown recipe id falls back to solo rather than throwing.
   assert.match(buildPrompt(promptConfig("bogus"), promptTicket, "", ""), /do NOT create or switch branches/i);
+
+  // Attached images are listed (by in-repo path) so the agent reads them first.
+  const withImg = { ...promptTicket, attachments: ["bug.png"] };
+  const imgPrompt = buildPrompt(promptConfig(), withImg, "", "");
+  assert.match(imgPrompt, /# Attached images/);
+  assert.match(imgPrompt, /\.henson\/board\/attachments\/T1\/bug\.png/);
+  assert.ok(!buildPrompt(promptConfig(), promptTicket, "", "").includes("# Attached images"));
 });
 
 test("a second run for the same active ticket returns the existing run", async () => {

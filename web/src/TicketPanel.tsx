@@ -161,6 +161,15 @@ export function TicketPanel({
           />
           {err && <p class="mt-2 text-sm text-red-400">{err}</p>}
 
+          {isEdit && ticket ? (
+            <Attachments projectId={projectId} ticketId={ticket.id} initial={ticket.attachments ?? []} />
+          ) : (
+            <>
+              <label class="field-label">Images</label>
+              <p class="text-xs text-zinc-500">Create the ticket first, then reopen it to attach images.</p>
+            </>
+          )}
+
           {isEdit && ticket && <AgentHistory projectId={projectId} ticketId={ticket.id} evt={evt} />}
         </div>
 
@@ -179,6 +188,86 @@ export function TicketPanel({
           </button>
         </footer>
       </div>
+    </div>
+  );
+}
+
+/** Image attachments for a ticket: upload, preview thumbnails, remove. The agent
+ *  reads these before starting (see buildPrompt's "Attached images" section). */
+function Attachments({ projectId, ticketId, initial }: { projectId: string; ticketId: string; initial: string[] }) {
+  const [items, setItems] = useState(initial);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const base = `/api/projects/${projectId}/tickets/${ticketId}/attachments`;
+
+  const upload = async (files: FileList | null) => {
+    if (!files?.length) return;
+    setBusy(true);
+    setErr("");
+    try {
+      for (const file of Array.from(files)) {
+        if (!file.type.startsWith("image/")) continue;
+        const res = await fetch(`${base}?name=${encodeURIComponent(file.name)}`, {
+          method: "POST",
+          headers: { "Content-Type": file.type },
+          body: file,
+        });
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || res.statusText);
+        const { ticket } = (await res.json()) as { ticket: Ticket };
+        setItems(ticket.attachments ?? []);
+      }
+    } catch (e) {
+      setErr(String((e as Error).message));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async (name: string) => {
+    const { ticket } = await api<{ ticket: Ticket }>(`${base}/${encodeURIComponent(name)}`, { method: "DELETE" });
+    setItems(ticket.attachments ?? []);
+  };
+
+  return (
+    <div class="mt-3">
+      <label class="field-label">Images</label>
+      <p class="mb-1.5 text-xs text-zinc-500">Attached images are shown to the agent — it reads them before starting.</p>
+      {items.length > 0 && (
+        <div class="mb-2 grid grid-cols-3 gap-2">
+          {items.map((name) => (
+            <div key={name} class="group relative">
+              <img
+                src={`${base}/${encodeURIComponent(name)}`}
+                alt={name}
+                class="h-20 w-full rounded-sm border border-zinc-800 object-cover"
+              />
+              <button
+                class="absolute right-1 top-1 rounded-sm bg-black/70 px-1 text-xs text-zinc-300 opacity-0 hover:text-red-400 group-hover:opacity-100"
+                title="Remove"
+                onClick={() => remove(name)}
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      <label class="btn btn-sm cursor-pointer">
+        {busy ? "Uploading…" : "+ Add images"}
+        <input
+          type="file"
+          accept="image/*"
+          multiple
+          class="hidden"
+          disabled={busy}
+          onChange={(e) => {
+            const t = e.target as HTMLInputElement;
+            void upload(t.files);
+            t.value = "";
+          }}
+        />
+      </label>
+      {err && <p class="mt-1 text-xs text-red-400">{err}</p>}
     </div>
   );
 }

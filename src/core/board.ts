@@ -2,7 +2,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import matter from "gray-matter";
 import { nanoid } from "nanoid";
-import { boardDir } from "./paths.js";
+import { attachmentsDir, boardDir } from "./paths.js";
 import {
   TICKET_STATES,
   type Ticket,
@@ -51,6 +51,7 @@ function parseTicket(id: string, raw: string): Ticket {
     created: (data.created as string) ?? now(),
     updated: (data.updated as string) ?? now(),
     body: content.trim(),
+    attachments: Array.isArray(data.attachments) ? (data.attachments as string[]) : undefined,
   };
 }
 
@@ -64,6 +65,7 @@ function serializeTicket(t: Ticket): string {
     labels: t.labels,
     created: t.created,
     updated: t.updated,
+    ...(t.attachments?.length ? { attachments: t.attachments } : {}),
   };
   return matter.stringify(`\n${t.body.trim()}\n`, fm);
 }
@@ -158,9 +160,65 @@ export async function updateTicket(
 export async function deleteTicket(projectRoot: string, id: string): Promise<boolean> {
   try {
     await fs.unlink(ticketPath(projectRoot, id));
+    await fs.rm(attachmentsDir(projectRoot, id), { recursive: true, force: true });
     return true;
   } catch {
     return false;
+  }
+}
+
+/** Strip any path components so an attachment name can't escape its ticket dir. */
+function safeName(name: string): string {
+  return path.basename(name).replace(/[^\w.\- ]+/g, "_");
+}
+
+/** Save an image attachment for a ticket and record it in the ticket's frontmatter. */
+export async function addAttachment(
+  projectRoot: string,
+  id: string,
+  name: string,
+  data: Buffer,
+): Promise<Ticket | undefined> {
+  const ticket = await getTicket(projectRoot, id);
+  if (!ticket) return undefined;
+  const dir = attachmentsDir(projectRoot, id);
+  await fs.mkdir(dir, { recursive: true });
+
+  // Keep names unique so a re-upload doesn't clobber an existing attachment.
+  let file = safeName(name);
+  const existing = new Set(ticket.attachments ?? []);
+  if (existing.has(file)) {
+    const ext = path.extname(file);
+    file = `${path.basename(file, ext)}-${nanoid(4)}${ext}`;
+  }
+  await fs.writeFile(path.join(dir, file), data);
+  return updateTicket(projectRoot, id, { attachments: [...(ticket.attachments ?? []), file] });
+}
+
+export async function removeAttachment(
+  projectRoot: string,
+  id: string,
+  name: string,
+): Promise<Ticket | undefined> {
+  const ticket = await getTicket(projectRoot, id);
+  if (!ticket) return undefined;
+  const file = safeName(name);
+  await fs.rm(path.join(attachmentsDir(projectRoot, id), file), { force: true });
+  return updateTicket(projectRoot, id, {
+    attachments: (ticket.attachments ?? []).filter((a) => a !== file),
+  });
+}
+
+/** Raw bytes of one attachment, or undefined if it's missing. */
+export async function readAttachment(
+  projectRoot: string,
+  id: string,
+  name: string,
+): Promise<Buffer | undefined> {
+  try {
+    return await fs.readFile(path.join(attachmentsDir(projectRoot, id), safeName(name)));
+  } catch {
+    return undefined;
   }
 }
 

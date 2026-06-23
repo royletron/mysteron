@@ -10,7 +10,7 @@ process.env.HENSON_HOME = path.join(tmp, "home");
 process.env.CLAUDE_PROJECTS_DIR = path.join(tmp, "claude");
 
 const { initProject, loadProjectConfig } = await import("../src/core/project.js");
-const { createTicket, listTickets, nextTicket, updateTicket } = await import("../src/core/board.js");
+const { createTicket, listTickets, nextTicket, updateTicket, getTicket, deleteTicket, addAttachment, removeAttachment, readAttachment } = await import("../src/core/board.js");
 const { readDoc, writeDoc } = await import("../src/core/docs.js");
 const { loadRegistry } = await import("../src/core/registry.js");
 const { usageInWindow } = await import("../src/plugins/usage-monitor/usage.js");
@@ -122,6 +122,31 @@ test("tickets: create, list (priority sorted), update, next", async () => {
   const moved = await updateTicket(projectRoot, hi.id, { state: "done" });
   assert.equal(moved?.state, "done");
   assert.equal((await listTickets(projectRoot, { state: "done" })).length, 1);
+});
+
+test("attachments: stored as bytes + frontmatter, de-duped, cleaned up on delete", async () => {
+  const t = await createTicket(projectRoot, { title: "has an image" });
+  const png = Buffer.from("89504e470d0a1a0a", "hex");
+
+  const withImg = await addAttachment(projectRoot, t.id, "shot.png", png);
+  assert.deepEqual(withImg?.attachments, ["shot.png"]);
+  // Persisted to frontmatter (survives a fresh read).
+  assert.deepEqual((await getTicket(projectRoot, t.id))?.attachments, ["shot.png"]);
+  // Bytes are retrievable.
+  assert.deepEqual(await readAttachment(projectRoot, t.id, "shot.png"), png);
+
+  // A duplicate name is kept distinct rather than clobbered.
+  const two = await addAttachment(projectRoot, t.id, "shot.png", png);
+  assert.equal(two?.attachments?.length, 2);
+
+  const removed = await removeAttachment(projectRoot, t.id, "shot.png");
+  assert.ok(!removed?.attachments?.includes("shot.png"));
+  assert.equal(await readAttachment(projectRoot, t.id, "shot.png"), undefined);
+
+  // Deleting the ticket removes its attachment dir too.
+  await addAttachment(projectRoot, t.id, "again.png", png);
+  await deleteTicket(projectRoot, t.id);
+  assert.equal(await readAttachment(projectRoot, t.id, "again.png"), undefined);
 });
 
 test("docs round-trip with path-traversal guard", async () => {

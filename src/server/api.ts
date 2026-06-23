@@ -2,6 +2,9 @@ import express, { type Express, type Request, type Response } from "express";
 import {
   bus,
   discoverProjectDocs,
+  addAttachment,
+  removeAttachment,
+  readAttachment,
   createTicket,
   deleteTicket,
   getTicket,
@@ -296,6 +299,44 @@ export function registerApi(
     const ok = await deleteTicket(r.entry.path, req.params.ticketId);
     bus.emitEvent({ type: "board-changed", projectId: r.entry.id });
     res.json({ ok });
+  });
+
+  // --- Ticket image attachments --------------------------------------------
+  // Upload is raw image bytes (skips the JSON body parser, so big images are
+  // fine); the filename rides in ?name=.
+  app.post(
+    "/api/projects/:id/tickets/:ticketId/attachments",
+    express.raw({ type: () => true, limit: "25mb" }),
+    async (req: Request, res: Response) => {
+      const r = await resolve(req.params.id);
+      if (!r) return notFound(res);
+      const type = String(req.headers["content-type"] ?? "");
+      if (!type.startsWith("image/")) return res.status(400).json({ error: "expected an image" });
+      if (!Buffer.isBuffer(req.body) || req.body.length === 0) return res.status(400).json({ error: "empty body" });
+      const q = req.query.name;
+      const name = typeof q === "string" && q.trim() ? q : `image.${type.split("/")[1]}`;
+      const ticket = await addAttachment(r.entry.path, req.params.ticketId, name, req.body);
+      if (!ticket) return notFound(res);
+      bus.emitEvent({ type: "board-changed", projectId: r.entry.id, detail: ticket.id });
+      res.json({ ticket });
+    },
+  );
+
+  app.delete("/api/projects/:id/tickets/:ticketId/attachments/:name", async (req: Request, res: Response) => {
+    const r = await resolve(req.params.id);
+    if (!r) return notFound(res);
+    const ticket = await removeAttachment(r.entry.path, req.params.ticketId, req.params.name);
+    if (!ticket) return notFound(res);
+    bus.emitEvent({ type: "board-changed", projectId: r.entry.id, detail: ticket.id });
+    res.json({ ticket });
+  });
+
+  app.get("/api/projects/:id/tickets/:ticketId/attachments/:name", async (req: Request, res: Response) => {
+    const r = await resolve(req.params.id);
+    if (!r) return notFound(res);
+    const bytes = await readAttachment(r.entry.path, req.params.ticketId, req.params.name);
+    if (!bytes) return notFound(res);
+    res.type(req.params.name).send(bytes);
   });
 
   // --- Agent runs ----------------------------------------------------------

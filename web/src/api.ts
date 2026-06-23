@@ -15,6 +15,7 @@ export interface Ticket {
   created: string;
   updated: string;
   body: string;
+  attachments?: string[];
 }
 
 export interface Companion {

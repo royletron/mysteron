@@ -234,6 +234,14 @@ export function buildPrompt(
         ]
       : [];
   const brief = companionSpec?.trim() ? [``, `# Your brief`, companionSpec.trim()] : [];
+  const images = ticket.attachments?.length
+    ? [
+        ``,
+        `# Attached images`,
+        `The reporter attached ${ticket.attachments.length} image(s) to this ticket. View each with the Read tool before starting — they show the problem or the desired result:`,
+        ...ticket.attachments.map((name) => `- .henson/board/attachments/${ticket.id}/${name}`),
+      ]
+    : [];
   return [
     `You are ${comp?.name ?? "the companion"} (role: ${comp?.role ?? "soloist"}), working on the project "${config.name}".`,
     `Work on the following ticket end-to-end, following the project etiquette. If a Henson MCP server is configured, use it to read docs/memory and to move this ticket to "review" when the work is complete and tests pass.`,
@@ -241,6 +249,7 @@ export function buildPrompt(
     ``,
     `# Ticket ${ticket.id}: ${ticket.title}`,
     ticket.body || "(no description)",
+    ...images,
     ``,
     `# Git`,
     gitInstruction(recipe.git),

@@ -27,6 +27,11 @@ export function docsDir(projectRoot: string): string {
   return path.join(projectHensonDir(projectRoot), "docs");
 }
 
+/** Where a ticket's image attachments live, e.g. <project>/.henson/board/attachments/<id> */
+export function attachmentsDir(projectRoot: string, ticketId: string): string {
+  return path.join(projectHensonDir(projectRoot), "board", "attachments", ticketId);
+}
+
 export function memoryDir(projectRoot: string): string {
   return path.join(projectHensonDir(projectRoot), "memory");
 }
