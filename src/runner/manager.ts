@@ -217,6 +217,16 @@ export function renderStreamEvent(obj: unknown): RenderedLine[] {
   return out;
 }
 
+/** Pull cost (USD) and turn count from a Claude Code `result` event. Exported for testing. */
+export function runResultStats(obj: unknown): { costUsd?: number; numTurns?: number } {
+  const e = obj as Record<string, unknown>;
+  if (e?.type !== "result") return {};
+  return {
+    costUsd: typeof e.total_cost_usd === "number" ? e.total_cost_usd : undefined,
+    numTurns: typeof e.num_turns === "number" ? e.num_turns : undefined,
+  };
+}
+
 /** Compose the agent prompt for a ticket, including the companion's recipe (team + git behaviour). Exported for testing. */
 export function buildPrompt(
   config: ProjectConfig,
@@ -516,11 +526,9 @@ export class RunManager {
           this.append(run, "stdout", raw); // not JSON — show as-is
           return;
         }
-        const e = obj as Record<string, unknown>;
-        if (e?.type === "result") {
-          if (typeof e.total_cost_usd === "number") run.costUsd = e.total_cost_usd;
-          if (typeof e.num_turns === "number") run.numTurns = e.num_turns;
-        }
+        const stats = runResultStats(obj);
+        if (stats.costUsd != null) run.costUsd = stats.costUsd;
+        if (stats.numTurns != null) run.numTurns = stats.numTurns;
         for (const r of renderStreamEvent(obj)) this.append(run, r.stream, r.text);
       } else {
         this.append(run, kind, raw);

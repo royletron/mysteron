@@ -11,7 +11,7 @@ process.env.HENSON_AGENT_CMD = 'echo "handling: $HENSON_TICKET_TITLE"; echo "oop
 
 const { initProject } = await import("../src/core/project.js");
 const { createTicket, getTicket } = await import("../src/core/board.js");
-const { RunManager, renderStreamEvent, resolveCommand, buildPrompt } = await import("../src/runner/manager.js");
+const { RunManager, renderStreamEvent, runResultStats, resolveCommand, buildPrompt } = await import("../src/runner/manager.js");
 const { runsDir } = await import("../src/core/paths.js");
 
 const promptConfig = (recipe?: string) =>
@@ -172,6 +172,17 @@ test("buildPrompt embeds the recipe's git behaviour and team", () => {
   assert.match(imgPrompt, /# Attached images/);
   assert.match(imgPrompt, /\.henson\/board\/attachments\/T1\/bug\.png/);
   assert.ok(!buildPrompt(promptConfig(), promptTicket, "", "").includes("# Attached images"));
+});
+
+test("runResultStats reads cost + turns from a result event", () => {
+  assert.deepEqual(runResultStats({ type: "result", total_cost_usd: 0.1234, num_turns: 5 }), {
+    costUsd: 0.1234,
+    numTurns: 5,
+  });
+  // Non-result events carry no stats.
+  assert.deepEqual(runResultStats({ type: "assistant" }), {});
+  // A result event missing the numbers yields undefineds, not NaN/0.
+  assert.deepEqual(runResultStats({ type: "result" }), { costUsd: undefined, numTurns: undefined });
 });
 
 test("a second run for the same active ticket returns the existing run", async () => {
