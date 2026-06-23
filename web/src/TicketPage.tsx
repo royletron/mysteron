@@ -152,11 +152,7 @@ export function TicketPage({
         <a href={`#/project/${projectId}`} class="btn btn-ghost btn-sm">
           ← board
         </a>
-        {lead ? (
-          <span class={active ? "pulse-ring" : ""}>
-            <Avatar companion={lead} size={34} />
-          </span>
-        ) : null}
+        {lead ? <Avatar companion={lead} size={34} /> : null}
         <div>
           <h1 class="text-xl font-semibold">{ticket.title}</h1>
           <div class="text-sm text-zinc-400">

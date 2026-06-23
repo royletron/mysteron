@@ -22,6 +22,7 @@ export function Board({ detail, evt, reload }: { detail: ProjectDetail; evt: App
   const projectId = detail.entry.id;
   const byId = new Map(detail.config.companions.map((c) => [c.id, c]));
   const busy = new Set(detail.busyCompanions ?? []);
+  const running = new Set((detail.activeRuns ?? []).map((r) => r.ticketId));
   const [dragOver, setDragOver] = useState<TicketState | null>(null);
   const [editing, setEditing] = useState<Ticket | "new" | null>(null);
 
@@ -76,6 +77,7 @@ export function Board({ detail, evt, reload }: { detail: ProjectDetail; evt: App
                   t={t}
                   companion={t.companionId ? byId.get(t.companionId) : undefined}
                   busy={Boolean(t.companionId && busy.has(t.companionId))}
+                  running={running.has(t.id)}
                   onEdit={() => setEditing(t)}
                 />
               ))}
@@ -106,12 +108,14 @@ function TicketCard({
   t,
   companion,
   busy,
+  running,
   onEdit,
 }: {
   projectId: string;
   t: Ticket;
   companion?: Companion;
   busy: boolean;
+  running: boolean;
   onEdit: () => void;
 }) {
   return (
@@ -126,23 +130,26 @@ function TicketCard({
         <button
           class="btn btn-sm shrink-0 px-2 py-0.5 text-emerald-400 opacity-60 hover:opacity-100"
           disabled={busy}
-          title={busy ? `${companion?.name ?? "Companion"} is busy with another ticket` : "Run an agent on this ticket (opens a live view)"}
+          title={
+            running
+              ? "Agent is running on this ticket"
+              : busy
+                ? `${companion?.name ?? "Companion"} is busy with another ticket`
+                : "Run an agent on this ticket (opens a live view)"
+          }
           onClick={(e) => {
             e.stopPropagation();
             if (!busy) window.open(runTicketUrl(projectId, t.id), "_blank");
           }}
         >
-          {busy ? <LiveDot /> : "▶"}
+          {running ? <LiveDot /> : "▶"}
         </button>
       </div>
       <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
         <span class="tag">{t.priority}</span>
         {companion ? (
           <span class="tag inline-flex items-center gap-1">
-            <span class={busy ? "pulse-ring" : ""}>
-              <Avatar companion={companion} size={14} />
-            </span>{" "}
-            {companion.name}
+            <Avatar companion={companion} size={14} /> {companion.name}
           </span>
         ) : t.assignee ? (
           <span class="tag">@{t.assignee}</span>

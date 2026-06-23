@@ -89,11 +89,6 @@
   .pulse {
     animation: pulse-soft 1.6s ease-in-out infinite;
   }
-  /* A pulsing halo around an avatar whose companion is mid-run. */
-  .pulse-ring {
-    @apply rounded-full;
-    animation: pulse-ring 1.8s ease-out infinite;
-  }
 }
 
 @keyframes drawer-in {
@@ -126,22 +121,9 @@
   }
 }
 
-@keyframes pulse-ring {
-  0% {
-    box-shadow: 0 0 0 0 rgba(255, 196, 0, 0.5);
-  }
-  70% {
-    box-shadow: 0 0 0 8px rgba(255, 196, 0, 0);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(255, 196, 0, 0);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .live-dot::after,
   .pulse,
-  .pulse-ring,
   .drawer {
     animation: none;
   }

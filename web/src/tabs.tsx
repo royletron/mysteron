@@ -514,9 +514,7 @@ function CompanionRow({
   return (
     <div class="rounded-lg border border-zinc-800 p-2.5">
       <div class="flex items-center gap-3">
-        <span class={activeRun ? "pulse-ring" : ""}>
-          <Avatar companion={companion} size={34} />
-        </span>
+        <Avatar companion={companion} size={34} />
         <div>
           <div class="font-medium">{companion.name}</div>
           {activeRun ? (
