@@ -1,0 +1,266 @@
+import { useEffect, useState } from "preact/hooks";
+import {
+  RUN_STATUS,
+  api,
+  type ProjectDetail,
+  type RunLine,
+  type RunStatus,
+  type RunSummary,
+  type Ticket,
+} from "./api";
+import { useAsync, useRunStream } from "./hooks";
+import { ErrorBox, Loading } from "./ui";
+import type { AppEvent } from "./App";
+
+interface TicketData {
+  detail: ProjectDetail;
+  ticket?: Ticket;
+  runs: RunSummary[];
+}
+
+export function TicketPage({
+  projectId,
+  ticketId,
+  autostart,
+  evt,
+}: {
+  projectId: string;
+  ticketId: string;
+  autostart: boolean;
+  evt: AppEvent;
+}) {
+  const [refresh, setRefresh] = useState(0);
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  const [lines, setLines] = useState<RunLine[]>([]);
+  const [liveStatus, setLiveStatus] = useState<{ status: RunStatus; exitCode?: number | null } | null>(null);
+
+  // Autostart (arrived via the ▶ play button): strip the marker and launch the
+  // agent here so there's no race between starting the run and opening the page.
+  useEffect(() => {
+    if (!autostart) return;
+    window.history.replaceState(null, "", `#/project/${projectId}/ticket/${ticketId}`);
+    api(`/api/projects/${projectId}/tickets/${ticketId}/run`, { method: "POST" })
+      .then(() => setRefresh((n) => n + 1))
+      .catch((e) => alert(`Could not start agent: ${(e as Error).message}`));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const matchSeq = evt.projectId === projectId ? evt.seq : -1;
+  const { data, loading, error } = useAsync<TicketData>(async () => {
+    const [detail, runsData] = await Promise.all([
+      api<ProjectDetail>(`/api/projects/${projectId}`),
+      api<{ runs: RunSummary[] }>(`/api/projects/${projectId}/runs`),
+    ]);
+    let ticket: Ticket | undefined;
+    for (const s of detail.states) {
+      const f = (detail.board[s] || []).find((t) => t.id === ticketId);
+      if (f) ticket = f;
+    }
+    return { detail, ticket, runs: runsData.runs.filter((r) => r.ticketId === ticketId) };
+  }, [projectId, ticketId, refresh, matchSeq]);
+
+  // Auto-select the active run (or the most recent one) once runs are known.
+  useEffect(() => {
+    if (!data) return;
+    if (selectedRunId && data.runs.some((r) => r.id === selectedRunId)) return;
+    const active = data.runs.find((r) => r.status === "running");
+    const pick = active?.id ?? data.runs[0]?.id ?? null;
+    if (pick) setSelectedRunId(pick);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
+
+  // Reset the log when switching which run we view.
+  useEffect(() => {
+    setLines([]);
+    setLiveStatus(null);
+  }, [selectedRunId]);
+
+  // Stream the selected run (auto-closes when the run finishes).
+  useRunStream(selectedRunId, {
+    onLine: (line) => setLines((ls) => [...ls, line]),
+    onStatus: (status, exitCode) => {
+      setLiveStatus({ status, exitCode });
+      setRefresh((n) => n + 1);
+    },
+  });
+
+  // Autoscroll the page to follow new output when already near the bottom.
+  useEffect(() => {
+    const doc = document.documentElement;
+    if (doc.scrollHeight - window.scrollY - window.innerHeight < 120) {
+      window.scrollTo({ top: doc.scrollHeight });
+    }
+  }, [lines]);
+
+  if (loading && !data) return <Loading />;
+  if (error || !data)
+    return (
+      <div>
+        <ErrorBox message={`Could not load: ${error}`} />
+        <div class="text-center">
+          <a href={`#/project/${projectId}`} class="btn btn-ghost">
+            ← back to board
+          </a>
+        </div>
+      </div>
+    );
+
+  const { detail, ticket, runs } = data;
+  if (!ticket)
+    return (
+      <div class="p-10 text-center text-zinc-500">
+        Ticket not found.
+        <div>
+          <a href={`#/project/${projectId}`} class="btn btn-ghost mt-2">
+            ← back to board
+          </a>
+        </div>
+      </div>
+    );
+
+  const c = detail.config;
+  const active = runs.find((r) => r.status === "running");
+  const selectedRun = runs.find((r) => r.id === selectedRunId);
+  const status = liveStatus?.status ?? selectedRun?.status;
+  const statusInfo = status ? RUN_STATUS[status] : null;
+
+  const startRun = async () => {
+    try {
+      await api(`/api/projects/${projectId}/tickets/${ticketId}/run`, { method: "POST" });
+      setSelectedRunId(null);
+      setRefresh((n) => n + 1);
+    } catch (e) {
+      alert((e as Error).message);
+    }
+  };
+  const stopRun = async () => {
+    const r = active || runs[0];
+    if (r) {
+      await api(`/api/runs/${r.id}/stop`, { method: "POST" });
+      setRefresh((n) => n + 1);
+    }
+  };
+
+  return (
+    <div>
+      <div class="mb-4 flex items-center gap-3">
+        <a href={`#/project/${projectId}`} class="btn btn-ghost btn-sm">
+          ← board
+        </a>
+        <div class="text-3xl leading-none">{c.companion.avatar}</div>
+        <div>
+          <h1 class="text-xl font-semibold">{ticket.title}</h1>
+          <div class="text-sm text-zinc-400">
+            {detail.entry.name} · {c.companion.name}
+          </div>
+        </div>
+        <div class="flex-1" />
+        <span class={`pill ${statusInfo?.color ?? "text-zinc-500"}`}>{statusInfo?.label ?? "idle"}</span>
+      </div>
+
+      <div class="grid grid-cols-[minmax(280px,360px)_1fr] items-start gap-4">
+        <div class="card sticky top-20 self-start">
+          <div class="mb-3 flex items-center gap-2">
+            {active ? (
+              <button class="btn btn-danger" onClick={stopRun}>
+                ■ Stop
+              </button>
+            ) : (
+              <button class="btn btn-primary" onClick={startRun}>
+                ▶ Run agent
+              </button>
+            )}
+            <span class="text-sm text-zinc-500">
+              {active ? "Agent is working…" : "Press Run to start the companion."}
+            </span>
+          </div>
+          <div class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
+            <b class="text-zinc-400">State</b>
+            <span>{ticket.state}</span>
+            <b class="text-zinc-400">Priority</b>
+            <span>{ticket.priority}</span>
+            <b class="text-zinc-400">Assignee</b>
+            <span>{ticket.assignee || "—"}</span>
+            <b class="text-zinc-400">Ticket id</b>
+            <span class="font-mono">{ticket.id}</span>
+          </div>
+          <label class="field-label">Description</label>
+          <pre class="max-h-[220px] overflow-auto whitespace-pre-wrap rounded-sm border border-zinc-800 bg-zinc-950 p-2.5 font-mono text-xs">
+            {ticket.body || "(no description)"}
+          </pre>
+          <label class="field-label">Run history</label>
+          {runs.length === 0 ? (
+            <div class="text-sm text-zinc-500">No runs yet.</div>
+          ) : (
+            <div class="flex flex-col gap-1">
+              {runs.map((r) => (
+                <button
+                  key={r.id}
+                  title={r.command}
+                  onClick={() => setSelectedRunId(r.id)}
+                  class={`flex items-center justify-between gap-2 rounded-sm border px-2 py-1 text-left text-xs ${
+                    r.id === selectedRunId
+                      ? "border-violet-500 text-zinc-100"
+                      : "border-zinc-800 text-zinc-400 hover:border-zinc-600"
+                  }`}
+                >
+                  <span class={RUN_STATUS[r.status]?.color}>{RUN_STATUS[r.status]?.label || r.status}</span>
+                  <span class="text-zinc-500">
+                    {fmtWhen(r.startedAt)}
+                    {runDuration(r) ? ` · ${runDuration(r)}` : ""}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div class="card">
+          <div class="mb-1.5 text-xs text-zinc-500">Live agent output</div>
+          <div class="min-h-[52vh] rounded-sm border border-zinc-800 bg-black/70 p-3 font-mono text-xs leading-relaxed">
+            {lines.length === 0 && <div class="text-zinc-600">Waiting for the agent…</div>}
+            {lines.map((l, i) => (
+              <LogLine key={i} stream={l.stream} text={l.text} />
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** "14:32:10" for runs started today, otherwise "23 Jun, 14:32". */
+function fmtWhen(iso: string): string {
+  const d = new Date(iso);
+  const today = new Date();
+  const sameDay = d.toDateString() === today.toDateString();
+  return sameDay
+    ? d.toLocaleTimeString()
+    : `${d.toLocaleDateString(undefined, { day: "numeric", month: "short" })}, ${d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}`;
+}
+
+/** Human-readable wall-clock duration of a finished run (e.g. "1m 12s"). */
+function runDuration(r: RunSummary): string {
+  if (!r.endedAt) return "";
+  const ms = new Date(r.endedAt).getTime() - new Date(r.startedAt).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return "";
+  const s = Math.round(ms / 1000);
+  return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
+}
+
+/** A single agent-log line, coloured by stream and the event prefix we render. */
+function LogLine({ stream, text }: { stream: RunLine["stream"]; text: string }) {
+  const head = text.trimStart();
+  let cls = "text-zinc-100"; // assistant / result text
+  if (stream === "stderr") cls = "text-red-400";
+  else if (stream === "system") {
+    if (head.startsWith("→")) cls = "text-violet-300"; // tool call
+    else if (head.startsWith("←")) cls = "text-zinc-500"; // tool result
+    else if (head.startsWith("✓")) cls = "text-emerald-400"; // result
+    else if (head.startsWith("✖")) cls = "text-red-400"; // error
+    else if (head.startsWith("▶") || head.startsWith("cwd:") || head.startsWith("■")) cls = "text-zinc-500"; // run control
+    else cls = "text-cyan-400"; // session / other system
+  }
+  return <div class={`whitespace-pre-wrap break-words ${cls}`}>{text === "" ? " " : text}</div>;
+}
+
