@@ -32,7 +32,7 @@ export function App() {
   }, [route.name, route.ticketId]);
 
   return (
-    <div>
+    <div class="flex min-h-[100dvh] flex-col">
       <header class="sticky top-0 z-10 flex items-center gap-2 border-b border-zinc-800 bg-zinc-950/80 px-6 py-3 backdrop-blur">
         <a href="#/" class="flex items-center gap-2">
           <Avatar seed="Henson" variant="marble" size={26} />
@@ -89,7 +89,7 @@ export function App() {
         </span>
       </header>
 
-      <main class="w-full p-6">
+      <main class="w-full flex-1 p-6">
         {route.name === "home" && <Home evt={evt} />}
         {route.name === "project" && route.projectId && (
           <Project key={route.projectId} projectId={route.projectId} evt={evt} />
@@ -105,6 +105,38 @@ export function App() {
           />
         )}
       </main>
+
+      <Footer />
     </div>
+  );
+}
+
+const REPO = "https://github.com/royletron/henson";
+
+function Footer() {
+  const link = "text-zinc-400 hover:text-violet-300";
+  return (
+    <footer class="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-zinc-800 px-6 py-4 text-sm text-zinc-500">
+      <span class="font-semibold text-zinc-300">Henson</span>
+      <a class={link} href={REPO} target="_blank" rel="noopener noreferrer">
+        GitHub
+      </a>
+      <a class={link} href={`${REPO}/issues`} target="_blank" rel="noopener noreferrer">
+        Issues
+      </a>
+      <a class={link} href={`${REPO}/stargazers`} target="_blank" rel="noopener noreferrer">
+        ★ Stars
+      </a>
+      <div class="flex-1" />
+      <a
+        class="font-mono text-xs hover:text-violet-300"
+        href={`${REPO}/commit/${__COMMIT_SHA__}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        title="Build commit"
+      >
+        {__COMMIT_SHA__}
+      </a>
+    </footer>
   );
 }
