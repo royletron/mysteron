@@ -5,6 +5,7 @@ import { nanoid } from "nanoid";
 import { bus, type RunLine } from "../core/events.js";
 import { updateTicket } from "../core/board.js";
 import { readDoc } from "../core/docs.js";
+import { findRecipe, gitInstruction } from "../core/recipes.js";
 import { ETIQUETTE_DOC, SPEC_DOC, runsDir } from "../core/paths.js";
 import type { ProjectConfig, Ticket } from "../core/types.js";
 
@@ -179,13 +180,28 @@ export function renderStreamEvent(obj: unknown): RenderedLine[] {
   return out;
 }
 
-function buildPrompt(config: ProjectConfig, ticket: Ticket, spec: string, etiquette: string): string {
+/** Compose the agent prompt for a ticket, including the companion's recipe (team + git behaviour). Exported for testing. */
+export function buildPrompt(config: ProjectConfig, ticket: Ticket, spec: string, etiquette: string): string {
+  const recipe = findRecipe(config.companion.recipe ?? "solo") ?? findRecipe("solo")!;
+  const team =
+    recipe.roles.length > 1
+      ? [
+          ``,
+          `# Team (${recipe.name})`,
+          `You may delegate to sub-agents in these roles; coordinate their work and own the final result:`,
+          ...recipe.roles.map((r) => `- **${r.role}** — ${r.description}`),
+        ]
+      : [];
   return [
     `You are ${config.companion.name} ${config.companion.avatar}, the companion agent for the project "${config.name}".`,
     `Work on the following ticket end-to-end, following the project etiquette. If a Henson MCP server is configured, use it to read docs/memory and to move this ticket to "review" when the work is complete and tests pass.`,
     ``,
     `# Ticket ${ticket.id}: ${ticket.title}`,
     ticket.body || "(no description)",
+    ``,
+    `# Git`,
+    gitInstruction(recipe.git),
+    ...team,
     ``,
     `# Project etiquette`,
     etiquette || "(none specified)",

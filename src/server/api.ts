@@ -17,7 +17,7 @@ import {
 } from "../core/index.js";
 import { findEntry, loadRegistry, unregisterProject } from "../core/registry.js";
 import { initProject, saveProjectConfig } from "../core/project.js";
-import { RECIPES } from "../core/recipes.js";
+import { RECIPES, findRecipe } from "../core/recipes.js";
 import { TICKET_STATES } from "../core/types.js";
 import { allPlugins, enabledPlugins } from "../plugins/manager.js";
 import { usageMonitorPlugin } from "../plugins/usage-monitor/index.js";
@@ -185,7 +185,10 @@ export function registerApi(
     };
     const next = { ...r.config };
     if (typeof yolo === "boolean") next.yolo = yolo;
-    if (typeof recipe === "string") next.companion = { ...next.companion, recipe };
+    if (typeof recipe === "string") {
+      if (!findRecipe(recipe)) return res.status(400).json({ error: `unknown recipe: ${recipe}` });
+      next.companion = { ...next.companion, recipe };
+    }
     if (Array.isArray(allowedTools)) next.allowedTools = allowedTools.map(String).filter((t) => t.trim());
     if (Array.isArray(disallowedTools)) next.disallowedTools = disallowedTools.map(String).filter((t) => t.trim());
     await saveProjectConfig(r.entry.path, next);

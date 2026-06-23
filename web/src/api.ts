@@ -127,10 +127,16 @@ export interface UsageBudget {
   recommendation?: string;
 }
 
+export interface RecipeGit {
+  strategy: "current-branch" | "new-branch";
+  branchPrefix?: string;
+}
+
 export interface Recipe {
   id: string;
   name: string;
   description: string;
+  git: RecipeGit;
   roles: { role: string; description: string }[];
 }
 

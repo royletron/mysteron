@@ -301,6 +301,12 @@ export function PluginsTab({ detail }: { detail: ProjectDetail }) {
 }
 
 // ---- Companion ----------------------------------------------------------
+function gitLabel(git: Recipe["git"]): string {
+  return git.strategy === "new-branch"
+    ? `new branch per ticket${git.branchPrefix ? ` (${git.branchPrefix}…)` : ""}`
+    : "discrete commits on current branch";
+}
+
 export function CompanionTab({ detail }: { detail: ProjectDetail }) {
   const c = detail.config;
   const path = detail.entry.path;
@@ -311,6 +317,21 @@ export function CompanionTab({ detail }: { detail: ProjectDetail }) {
     2,
   );
   const recipes = useAsync(() => api<{ recipes: Recipe[] }>("/api/recipes"), []);
+  const [recipe, setRecipe] = useState(c.companion.recipe || "solo");
+  const [saving, setSaving] = useState("");
+
+  const choose = async (id: string) => {
+    if (id === recipe || saving) return;
+    setSaving(id);
+    try {
+      await api(`/api/projects/${detail.entry.id}/config`, { method: "PATCH", body: JSON.stringify({ recipe: id }) });
+      setRecipe(id);
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setSaving("");
+    }
+  };
 
   return (
     <div>
@@ -323,8 +344,8 @@ export function CompanionTab({ detail }: { detail: ProjectDetail }) {
           </div>
         </div>
         <div class="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
-          <b class="text-zinc-400">Default recipe</b>
-          <span>{c.companion.recipe || "solo"}</span>
+          <b class="text-zinc-400">Active recipe</b>
+          <span>{recipe}</span>
           <b class="text-zinc-400">Yolo mode</b>
           <span>{c.yolo ? "⚡ on — may work autonomously within usage budget" : "off"}</span>
           <b class="text-zinc-400">Plugins</b>
@@ -345,22 +366,41 @@ export function CompanionTab({ detail }: { detail: ProjectDetail }) {
 
       <div class="card mt-4">
         <h2 class="text-lg font-semibold">Agent-team recipes</h2>
-        {(recipes.data?.recipes ?? []).map((r) => (
-          <div key={r.id} class="rounded-sm px-2.5 py-2 hover:bg-zinc-800/60">
-            <div>
-              <b>{r.name} </b>
-              <span class="pill">{r.id}</span>
+        <p class="text-sm text-zinc-400">Toggle the companion onto a recipe. It sets the team roles and how the agents use git.</p>
+        {(recipes.data?.recipes ?? []).map((r) => {
+          const active = r.id === recipe;
+          return (
+            <div
+              key={r.id}
+              onClick={() => choose(r.id)}
+              class={`mt-1.5 cursor-pointer rounded-sm border px-2.5 py-2 ${
+                active ? "border-violet-500 bg-violet-500/10" : "border-transparent hover:bg-zinc-800/60"
+              }`}
+            >
+              <div class="flex items-center gap-2">
+                <b>{r.name} </b>
+                <span class="pill">{r.id}</span>
+                <div class="flex-1" />
+                {saving === r.id ? (
+                  <span class="text-xs text-zinc-500">saving…</span>
+                ) : active ? (
+                  <span class="pill border-violet-500 text-violet-300">✓ active</span>
+                ) : (
+                  <span class="text-xs text-zinc-500">Use this</span>
+                )}
+              </div>
+              <div class="text-xs text-zinc-500">{r.description}</div>
+              <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
+                {r.roles.map((role) => (
+                  <span key={role.role} class="badge" title={role.description}>
+                    {role.role}
+                  </span>
+                ))}
+                <span class="badge" title="Git behaviour for this recipe">⎇ {gitLabel(r.git)}</span>
+              </div>
             </div>
-            <div class="text-xs text-zinc-500">{r.description}</div>
-            <div class="mt-1.5 flex flex-wrap gap-1.5">
-              {r.roles.map((role) => (
-                <span key={role.role} class="badge" title={role.description}>
-                  {role.role}
-                </span>
-              ))}
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

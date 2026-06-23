@@ -14,6 +14,7 @@ const { createTicket, listTickets, nextTicket, updateTicket } = await import("..
 const { readDoc, writeDoc } = await import("../src/core/docs.js");
 const { loadRegistry } = await import("../src/core/registry.js");
 const { usageInWindow } = await import("../src/plugins/usage-monitor/usage.js");
+const { RECIPES, findRecipe, gitInstruction } = await import("../src/core/recipes.js");
 
 const projectRoot = path.join(tmp, "proj");
 
@@ -121,6 +122,19 @@ test("docs round-trip with path-traversal guard", async () => {
   await writeDoc(projectRoot, "DESIGN", "# design\nbody");
   assert.match((await readDoc(projectRoot, "DESIGN.md")) ?? "", /# design/);
   await assert.rejects(() => writeDoc(projectRoot, "../escape.md", "x"));
+});
+
+test("recipes declare git behaviour that drives the agent instructions", () => {
+  // Every recipe has a git strategy.
+  for (const r of RECIPES) assert.ok(["current-branch", "new-branch"].includes(r.git.strategy), `${r.id} has a git strategy`);
+
+  // Solo (the common default) keeps work on the current branch.
+  assert.equal(findRecipe("solo")?.git.strategy, "current-branch");
+  assert.match(gitInstruction({ strategy: "current-branch" }), /do NOT create or switch branches/i);
+
+  // new-branch produces branch-cutting instructions using the prefix.
+  assert.match(gitInstruction({ strategy: "new-branch", branchPrefix: "spike/" }), /spike\//);
+  assert.equal(findRecipe("nope"), undefined);
 });
 
 test("usage parser sums tokens within the window", async () => {

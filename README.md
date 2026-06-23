@@ -178,6 +178,13 @@ A companion can work `solo` or delegate using a recipe (`fullstack`, `backend`,
 `research`, …). Each recipe lists roles (designer, frontend, backend, reviewer)
 the companion can spin up as sub-agents. See `list_recipes`.
 
+Toggle the companion onto a recipe from the **Companion** tab (or `PATCH
+/api/projects/:id/config { recipe }`). The chosen recipe also sets **git
+behaviour**: most recipes keep small discrete commits on the current branch
+(`current-branch`) so agents sharing one checkout don't litter it with branches,
+while `research` cuts a throwaway `spike/` branch (`new-branch`). The strategy is
+woven into the agent's prompt.
+
 ## Plugins
 
 Plugins contribute MCP tools. The bundled **usage-monitor** parses Claude Code

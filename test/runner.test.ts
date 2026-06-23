@@ -11,8 +11,12 @@ process.env.HENSON_AGENT_CMD = 'echo "handling: $HENSON_TICKET_TITLE"; echo "oop
 
 const { initProject } = await import("../src/core/project.js");
 const { createTicket, getTicket } = await import("../src/core/board.js");
-const { RunManager, renderStreamEvent, resolveCommand } = await import("../src/runner/manager.js");
+const { RunManager, renderStreamEvent, resolveCommand, buildPrompt } = await import("../src/runner/manager.js");
 const { runsDir } = await import("../src/core/paths.js");
+
+const promptConfig = (recipe?: string) =>
+  ({ id: "x", name: "P", companion: { name: "Bo", avatar: "🦢", recipe }, plugins: [], yolo: false, createdAt: "" }) as any;
+const promptTicket = { id: "T1", title: "Do the thing", body: "details", state: "ready", priority: "medium", labels: [], created: "", updated: "" } as any;
 
 const projectRoot = path.join(tmp, "proj");
 
@@ -121,6 +125,28 @@ test("resolveCommand maps yolo + allowed/disallowed tools to claude flags", () =
   } finally {
     if (saved !== undefined) process.env.HENSON_AGENT_CMD = saved;
   }
+});
+
+test("buildPrompt embeds the recipe's git behaviour and team", () => {
+  // Default (no recipe) → solo → discrete commits on the current branch, no team section.
+  const solo = buildPrompt(promptConfig(), promptTicket, "the spec", "always commit");
+  assert.match(solo, /# Git/);
+  assert.match(solo, /do NOT create or switch branches/i);
+  assert.ok(!solo.includes("# Team"), "solo has no team section");
+
+  // A multi-role recipe lists its roles for delegation.
+  const team = buildPrompt(promptConfig("fullstack"), promptTicket, "", "");
+  assert.match(team, /# Team \(Full-stack team\)/);
+  assert.match(team, /- \*\*designer\*\*/);
+  assert.match(team, /do NOT create or switch branches/i, "fullstack still works on the current branch");
+
+  // The research recipe opts into a throwaway branch instead.
+  const research = buildPrompt(promptConfig("research"), promptTicket, "", "");
+  assert.match(research, /Create a dedicated git branch/);
+  assert.match(research, /spike\//);
+
+  // An unknown recipe id falls back to solo rather than throwing.
+  assert.match(buildPrompt(promptConfig("bogus"), promptTicket, "", ""), /do NOT create or switch branches/i);
 });
 
 test("a second run for the same active ticket returns the existing run", async () => {
