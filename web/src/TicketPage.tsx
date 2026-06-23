@@ -137,6 +137,7 @@ export function TicketPage({
   const selectedRun = runs.find((r) => r.id === selectedRunId);
   const status = liveStatus?.status ?? selectedRun?.status;
   const statusInfo = status ? RUN_STATUS[status] : null;
+  const timerRun = active ?? selectedRun;
 
   const startRun = async () => {
     try {
@@ -169,30 +170,26 @@ export function TicketPage({
             {lead ? ` · ${lead.name}` : ""}
           </div>
         </div>
-        <div class="flex-1" />
-        <span class={`pill gap-1.5 ${statusInfo?.color ?? "text-zinc-500"}`}>
-          {statusInfo?.live && <LiveDot />}
-          {statusInfo?.label ?? "idle"}
-        </span>
       </div>
 
       <div class="grid grid-cols-[minmax(280px,360px)_1fr] items-start gap-4">
         <div class="card sticky top-20 self-start">
           <div class="mb-3 flex items-center gap-2">
+            <span class={`pill gap-1.5 ${statusInfo?.color ?? "text-zinc-500"}`}>
+              {statusInfo?.live && <LiveDot />}
+              {statusInfo?.label ?? "idle"}
+            </span>
+            {timerRun && <RunTimer run={timerRun} class="text-sm text-zinc-400" />}
+            <div class="flex-1" />
             {active ? (
-              <button class="btn btn-danger" onClick={stopRun}>
-                ■ Stop
+              <button class="btn btn-danger" title="Stop agent" onClick={stopRun}>
+                ■
               </button>
             ) : (
-              <button class="btn btn-primary" onClick={startRun}>
-                ▶ Run agent
+              <button class="btn btn-primary" title="Run agent" onClick={startRun}>
+                ▶
               </button>
             )}
-            <span class="inline-flex items-center gap-1.5 text-sm text-zinc-500">
-              {active && <LiveDot class="text-amber-400" />}
-              {active ? "Agent is working…" : "Press Run to start the companion."}
-              {active && <RunTimer run={active} class="text-amber-400" />}
-            </span>
           </div>
           <div class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
             <b class="text-zinc-400">State</b>
