@@ -1,54 +1,15 @@
-import { useEffect, useRef } from "preact/hooks";
-import { EditorState } from "@codemirror/state";
-import { EditorView, keymap, drawSelection, highlightActiveLine, placeholder as placeholderExt } from "@codemirror/view";
-import { history, defaultKeymap, historyKeymap, indentWithTab } from "@codemirror/commands";
-import { syntaxHighlighting, HighlightStyle } from "@codemirror/language";
-import { markdown } from "@codemirror/lang-markdown";
-import { languages } from "@codemirror/language-data";
-import { tags as t } from "@lezer/highlight";
+import { useRef } from "preact/hooks";
 
-// Token colours, tuned to match the app palette (violet accents, cyan code).
-const highlight = HighlightStyle.define([
-  { tag: [t.heading, t.heading1, t.heading2, t.heading3, t.heading4], color: "#f4f4f5", fontWeight: "600" },
-  { tag: t.strong, color: "#f4f4f5", fontWeight: "600" },
-  { tag: t.emphasis, fontStyle: "italic" },
-  { tag: t.strikethrough, textDecoration: "line-through" },
-  { tag: [t.link, t.url], color: "#a78bfa" },
-  { tag: [t.monospace, t.literal], color: "#67e8f9" },
-  { tag: t.quote, color: "#a1a1aa", fontStyle: "italic" },
-  { tag: t.list, color: "#a78bfa" },
-  { tag: t.contentSeparator, color: "#52525b" },
-  // The markdown syntax markers themselves (#, *, `, >, -) stay quiet.
-  { tag: [t.processingInstruction, t.meta], color: "#71717a" },
-]);
-
-// Chrome styling — transparent so it sits inside the existing zinc-950 panel.
-const theme = EditorView.theme(
-  {
-    "&": { color: "#f4f4f5", backgroundColor: "transparent", fontSize: "12px" },
-    "&.cm-focused": { outline: "none" },
-    ".cm-content": {
-      fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-      lineHeight: "1.6",
-      caretColor: "#a78bfa",
-      padding: "8px 0",
-    },
-    ".cm-cursor, .cm-dropCursor": { borderLeftColor: "#a78bfa" },
-    "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection": {
-      backgroundColor: "#6d28d955",
-    },
-    ".cm-activeLine": { backgroundColor: "#ffffff08" },
-    ".cm-scroller": { overflow: "auto" },
-    ".cm-line": { padding: "0 8px" },
-  },
-  { dark: true },
-);
-
+/**
+ * A plain, robust controlled textarea editor. (We previously embedded CodeMirror
+ * here for syntax highlighting, but its imperative DOM + per-keystroke re-renders
+ * deadlocked the tab. A textarea can't loop, and the Docs tab still renders a live
+ * markdown preview alongside it.) Same props as before, so call sites are unchanged.
+ */
 export function CodeEditor({
   value,
   onChange,
   onSave,
-  language = "markdown",
   readOnly = false,
   placeholder,
   class: className = "",
@@ -56,64 +17,42 @@ export function CodeEditor({
   value: string;
   onChange?: (value: string) => void;
   onSave?: () => void;
-  // Markdown highlights prose syntax; "text" keeps the monospace chrome for
-  // config/JSON fields where markdown markers would mislead.
   language?: "markdown" | "text";
   readOnly?: boolean;
   placeholder?: string;
   class?: string;
 }) {
-  const host = useRef<HTMLDivElement>(null);
-  const view = useRef<EditorView>();
-  // Keep the latest callbacks reachable without rebuilding the editor.
-  const onChangeRef = useRef(onChange);
-  const onSaveRef = useRef(onSave);
-  onChangeRef.current = onChange;
-  onSaveRef.current = onSave;
+  const ref = useRef<HTMLTextAreaElement>(null);
 
-  useEffect(() => {
-    const saveKey = keymap.of([
-      {
-        key: "Mod-s",
-        run: () => {
-          onSaveRef.current?.();
-          return true;
-        },
-      },
-    ]);
-    const state = EditorState.create({
-      doc: value,
-      extensions: [
-        history(),
-        drawSelection(),
-        highlightActiveLine(),
-        EditorView.lineWrapping,
-        ...(language === "markdown"
-          ? [markdown({ codeLanguages: languages }), syntaxHighlighting(highlight)]
-          : []),
-        ...(readOnly ? [EditorState.readOnly.of(true), EditorView.editable.of(false)] : []),
-        ...(placeholder ? [placeholderExt(placeholder)] : []),
-        keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
-        saveKey,
-        theme,
-        EditorView.updateListener.of((u) => {
-          if (u.docChanged) onChangeRef.current?.(u.state.doc.toString());
-        }),
-      ],
-    });
-    const v = new EditorView({ state, parent: host.current! });
-    view.current = v;
-    return () => v.destroy();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Push external value changes (e.g. switching documents) into the editor.
-  useEffect(() => {
-    const v = view.current;
-    if (v && value !== v.state.doc.toString()) {
-      v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: value } });
+  const onKeyDown = (e: KeyboardEvent) => {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
+      e.preventDefault();
+      onSave?.();
+      return;
     }
-  }, [value]);
+    // Tab inserts two spaces rather than moving focus.
+    if (e.key === "Tab" && !e.shiftKey) {
+      e.preventDefault();
+      const ta = ref.current!;
+      const { selectionStart: s, selectionEnd: en } = ta;
+      const next = value.slice(0, s) + "  " + value.slice(en);
+      onChange?.(next);
+      requestAnimationFrame(() => {
+        ta.selectionStart = ta.selectionEnd = s + 2;
+      });
+    }
+  };
 
-  return <div ref={host} class={`overflow-auto ${className}`} />;
+  return (
+    <textarea
+      ref={ref}
+      class={`font-mono text-xs leading-relaxed ${className}`}
+      value={value}
+      readOnly={readOnly}
+      placeholder={placeholder}
+      spellcheck={false}
+      onInput={(e) => onChange?.((e.target as HTMLTextAreaElement).value)}
+      onKeyDown={onKeyDown}
+    />
+  );
 }

@@ -103,7 +103,7 @@ export function TicketPanel({
           <input class="input" value={title} onInput={(e) => setTitle((e.target as HTMLInputElement).value)} />
           <label class="field-label">Description</label>
           <CodeEditor
-            class="input min-h-[120px] p-0 text-xs"
+            class="input min-h-[120px] text-xs"
             value={body}
             onChange={setBody}
             onSave={save}

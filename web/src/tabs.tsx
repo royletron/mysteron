@@ -69,7 +69,7 @@ export function DocsTab({ detail }: { detail: ProjectDetail }) {
 
   const editor = (
     <CodeEditor
-      class="input h-full min-h-[60vh] p-0 text-xs"
+      class="input h-full min-h-[60vh] text-xs"
       value={content}
       onChange={setContent}
       onSave={save}
@@ -372,9 +372,9 @@ export function CompanionTab({ detail }: { detail: ProjectDetail }) {
         <h2 class="text-lg font-semibold">Connect an agent</h2>
         <p class="text-sm text-zinc-400">Give Claude Code (or any MCP client) access to this project's board, docs and memory:</p>
         <label class="field-label">Run the MCP server</label>
-        <CodeEditor class="input p-0 text-xs" language="text" readOnly value={cmd} />
+        <CodeEditor class="input text-xs" language="text" readOnly value={cmd} />
         <label class="field-label">…or add to your MCP client config</label>
-        <CodeEditor class="input min-h-[140px] p-0 text-xs" language="text" readOnly value={mcpJson} />
+        <CodeEditor class="input min-h-[140px] text-xs" language="text" readOnly value={mcpJson} />
       </div>
 
       <div class="card mt-4">
@@ -543,7 +543,7 @@ function CompanionRow({
       {editing && (
         <div class="mt-2">
           <CodeEditor
-            class="input min-h-[160px] p-0 text-xs"
+            class="input min-h-[160px] text-xs"
             value={spec ?? ""}
             onChange={setSpec}
             onSave={saveBrief}
@@ -596,7 +596,7 @@ function PermissionsCard({ projectId, config }: { projectId: string; config: Pro
         <div>
           <label class="field-label">Allowed tools</label>
           <CodeEditor
-            class="input min-h-[120px] p-0 text-xs"
+            class="input min-h-[120px] text-xs"
             language="text"
             placeholder={"Edit\nWrite\nBash(npm test:*)\nBash(git *)"}
             value={allowed}
@@ -607,7 +607,7 @@ function PermissionsCard({ projectId, config }: { projectId: string; config: Pro
         <div>
           <label class="field-label">Disallowed tools</label>
           <CodeEditor
-            class="input min-h-[120px] p-0 text-xs"
+            class="input min-h-[120px] text-xs"
             language="text"
             placeholder={"Bash(rm *)\nWebFetch"}
             value={disallowed}
