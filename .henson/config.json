@@ -1,14 +1,18 @@
 {
   "id": "uYKEvded",
   "name": "henson",
-  "companion": {
-    "name": "Waldorf the Compiler",
-    "avatar": "🚀",
-    "recipe": "solo"
-  },
   "plugins": [
     "usage-monitor"
   ],
   "yolo": true,
-  "createdAt": "2026-06-23T11:17:59.481Z"
+  "createdAt": "2026-06-23T11:17:59.481Z",
+  "recipe": "solo",
+  "companions": [
+    {
+      "id": "c1bf55fe-3e93-410d-94a7-cfde4dc1f80e",
+      "name": "Waldorf the Compiler",
+      "role": "soloist",
+      "avatarSeed": "Waldorf the Compiler"
+    }
+  ]
 }

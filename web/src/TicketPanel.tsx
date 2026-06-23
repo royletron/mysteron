@@ -1,10 +1,12 @@
 import { useState } from "preact/hooks";
+import { CodeEditor } from "./CodeEditor";
 import {
   RUN_STATUS,
   STATE_LABELS,
   api,
   fmtWhen,
   runDuration,
+  type Companion,
   type RunSummary,
   type Ticket,
   type TicketPriority,
@@ -26,12 +28,14 @@ function agentViewUrl(projectId: string, ticketId: string, run = false): string 
 export function TicketPanel({
   projectId,
   ticket,
+  companions,
   evt,
   onClose,
   onSaved,
 }: {
   projectId: string;
   ticket: Ticket | null;
+  companions: Companion[];
   evt: AppEvent;
   onClose: () => void;
   onSaved: () => void;
@@ -42,7 +46,7 @@ export function TicketPanel({
   const [state, setState] = useState<TicketState>(ticket?.state ?? "backlog");
   const [priority, setPriority] = useState<TicketPriority>(ticket?.priority ?? "medium");
   const [labels, setLabels] = useState((ticket?.labels ?? []).join(", "));
-  const [assignee, setAssignee] = useState(ticket?.assignee ?? "");
+  const [companionId, setCompanionId] = useState(ticket?.companionId ?? "");
   const [err, setErr] = useState("");
 
   const save = async () => {
@@ -55,7 +59,7 @@ export function TicketPanel({
       body,
       state,
       priority,
-      assignee: assignee.trim() || undefined,
+      companionId: companionId || undefined,
       labels: labels.split(",").map((s) => s.trim()).filter(Boolean),
     };
     try {
@@ -98,10 +102,12 @@ export function TicketPanel({
           <label class="field-label !mt-0">Title</label>
           <input class="input" value={title} onInput={(e) => setTitle((e.target as HTMLInputElement).value)} />
           <label class="field-label">Description</label>
-          <textarea
-            class="input min-h-[120px] font-mono text-xs"
+          <CodeEditor
+            class="input min-h-[120px] p-0 text-xs"
             value={body}
-            onInput={(e) => setBody((e.target as HTMLTextAreaElement).value)}
+            onChange={setBody}
+            onSave={save}
+            placeholder="Describe the ticket… (markdown supported)"
           />
           <div class="flex gap-2.5">
             <div class="flex-1">
@@ -133,8 +139,19 @@ export function TicketPanel({
               </select>
             </div>
           </div>
-          <label class="field-label">Assignee</label>
-          <input class="input" value={assignee} onInput={(e) => setAssignee((e.target as HTMLInputElement).value)} />
+          <label class="field-label">Companion</label>
+          <select
+            class="input"
+            value={companionId}
+            onChange={(e) => setCompanionId((e.target as HTMLSelectElement).value)}
+          >
+            <option value="">Unassigned</option>
+            {companions.map((comp) => (
+              <option key={comp.id} value={comp.id}>
+                {comp.name} — {comp.role}
+              </option>
+            ))}
+          </select>
           <label class="field-label">Labels</label>
           <input
             class="input"
@@ -214,6 +231,7 @@ function AgentHistory({ projectId, ticketId, evt }: { projectId: string; ticketI
                   <span>·</span>
                   <span>{fmtWhen(r.startedAt)}</span>
                   {dur && <span>· {dur}</span>}
+                  {r.logAvailable === false && <span title={`Ran on ${r.hostname}; logs are local to that machine`}>🖥 {r.hostname}</span>}
                 </span>
               </a>
             );

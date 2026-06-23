@@ -45,6 +45,7 @@ function parseTicket(id: string, raw: string): Ticket {
     title: (data.title as string) ?? "(untitled)",
     state: TICKET_STATES.includes(state) ? state : "backlog",
     priority: (data.priority as TicketPriority) ?? "medium",
+    companionId: data.companionId as string | undefined,
     assignee: data.assignee as string | undefined,
     labels: Array.isArray(data.labels) ? (data.labels as string[]) : [],
     created: (data.created as string) ?? now(),
@@ -58,6 +59,7 @@ function serializeTicket(t: Ticket): string {
     title: t.title,
     state: t.state,
     priority: t.priority,
+    ...(t.companionId ? { companionId: t.companionId } : {}),
     ...(t.assignee ? { assignee: t.assignee } : {}),
     labels: t.labels,
     created: t.created,
@@ -112,6 +114,7 @@ export async function createTicket(
     body?: string;
     state?: TicketState;
     priority?: TicketPriority;
+    companionId?: string;
     assignee?: string;
     labels?: string[];
   },
@@ -123,6 +126,7 @@ export async function createTicket(
     title: input.title,
     state: input.state ?? "backlog",
     priority: input.priority ?? "medium",
+    companionId: input.companionId,
     assignee: input.assignee,
     labels: input.labels ?? [],
     created: ts,
@@ -178,4 +182,19 @@ export async function nextTicket(
     });
   }
   return candidate;
+}
+
+/**
+ * The highest-priority "ready" ticket assigned to a given companion (used by the
+ * per-companion autopilot so each companion only does its own work).
+ */
+export async function nextTicketForCompanion(
+  projectRoot: string,
+  companionId: string,
+  opts?: { includeUnassigned?: boolean },
+): Promise<Ticket | undefined> {
+  const ready = await listTickets(projectRoot, { state: "ready" });
+  return ready.find(
+    (t) => t.companionId === companionId || (opts?.includeUnassigned && !t.companionId),
+  );
 }

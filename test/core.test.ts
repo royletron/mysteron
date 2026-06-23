@@ -30,8 +30,10 @@ test("initProject scaffolds config, docs and registers", async () => {
   const { config, alreadyInitialised } = await initProject(projectRoot, { name: "Demo" });
   assert.equal(alreadyInitialised, false);
   assert.equal(config.name, "Demo");
-  assert.ok(config.companion.name.length > 0);
-  assert.ok(config.companion.avatar.length > 0);
+  assert.equal(config.recipe, "solo");
+  assert.equal(config.companions.length, 1);
+  assert.equal(config.companions[0].role, "soloist");
+  assert.ok(config.companions[0].name.length > 0);
   assert.ok(config.plugins.includes("usage-monitor"));
 
   const spec = await readDoc(projectRoot, "SPEC.md");
@@ -89,7 +91,10 @@ test("init adopts an existing committed .henson (cloned-from-elsewhere)", async 
   assert.equal(res.alreadyInitialised, true);
   // Companion identity is preserved, not regenerated.
   assert.equal(res.config.id, "shared01");
-  assert.equal(res.config.companion.name, "Gonzo the Bold");
+  // The pre-roster single companion is migrated to a soloist of the same name.
+  assert.equal(res.config.companions[0].name, "Gonzo the Bold");
+  assert.equal(res.config.companions[0].role, "soloist");
+  assert.equal(res.config.recipe, "fullstack");
   assert.equal(res.config.yolo, true);
 
   // Registry entry reuses the committed id so identity is stable across machines.

@@ -15,7 +15,15 @@ const { RunManager, renderStreamEvent, resolveCommand, buildPrompt } = await imp
 const { runsDir } = await import("../src/core/paths.js");
 
 const promptConfig = (recipe?: string) =>
-  ({ id: "x", name: "P", companion: { name: "Bo", avatar: "🦢", recipe }, plugins: [], yolo: false, createdAt: "" }) as any;
+  ({
+    id: "x",
+    name: "P",
+    recipe: recipe ?? "solo",
+    companions: [{ id: "c1", name: "Bo", role: "soloist", avatarSeed: "Bo" }],
+    plugins: [],
+    yolo: false,
+    createdAt: "",
+  }) as any;
 const promptTicket = { id: "T1", title: "Do the thing", body: "details", state: "ready", priority: "medium", labels: [], created: "", updated: "" } as any;
 
 const projectRoot = path.join(tmp, "proj");
@@ -49,7 +57,7 @@ test("RunManager runs an agent, claims the ticket and captures output", async ()
   // Ticket is claimed immediately for the companion.
   const claimed = await getTicket(projectRoot, ticket.id);
   assert.equal(claimed?.state, "in-progress");
-  assert.equal(claimed?.assignee, config.companion.name);
+  assert.equal(claimed?.assignee, config.companions[0].name);
 
   await waitFor(() => rm.get(run.id)?.status !== "running");
   const finished = rm.get(run.id)!;
@@ -122,6 +130,12 @@ test("resolveCommand maps yolo + allowed/disallowed tools to claude flags", () =
 
     const on = resolveCommand({ ...base, yolo: true } as any, "/tmp/proj", "PROMPT");
     assert.ok(on.args.includes("bypassPermissions"));
+
+    // A companion pins a stable session id for conversation continuity.
+    const comp = { id: "11111111-1111-1111-1111-111111111111", name: "Bo", role: "soloist", avatarSeed: "Bo" };
+    const withSession = resolveCommand({ ...base, yolo: false } as any, "/tmp/proj", "PROMPT", comp as any);
+    assert.ok(withSession.args.includes("--session-id"));
+    assert.ok(withSession.args.includes(comp.id));
   } finally {
     if (saved !== undefined) process.env.HENSON_AGENT_CMD = saved;
   }
@@ -162,6 +176,25 @@ test("a second run for the same active ticket returns the existing run", async (
   assert.equal(rm.get(a.id)?.status, "stopped");
 });
 
+test("a companion runs one ticket at a time (busy lock)", async () => {
+  process.env.HENSON_AGENT_CMD = "sleep 1";
+  const proj = path.join(tmp, "lock");
+  const { config } = await initProject(proj, { name: "Lock" }); // solo → one soloist
+  const a = await createTicket(proj, { title: "A", state: "ready" });
+  const b = await createTicket(proj, { title: "B", state: "ready" });
+  const rm = new RunManager();
+  const runA = await rm.start({ projectId: config.id, projectRoot: proj, config, ticket: a });
+  assert.equal(runA.companionId, config.companions[0].id, "run carries the companion id");
+  // The soloist is busy with A, so starting B (a different ticket) is refused.
+  await assert.rejects(
+    () => rm.start({ projectId: config.id, projectRoot: proj, config, ticket: b }),
+    /busy/i,
+  );
+  assert.deepEqual(rm.busyCompanionIds(config.id), [config.companions[0].id]);
+  rm.stop(runA.id);
+  await waitFor(() => rm.get(runA.id)?.status !== "running");
+});
+
 test("a finished run is persisted to disk and survives a restart", async () => {
   process.env.HENSON_AGENT_CMD = 'echo "did the work"';
   const proj = path.join(tmp, "persist");
@@ -172,19 +205,24 @@ test("a finished run is persisted to disk and survives a restart", async () => {
   const run = await rm.start({ projectId: config.id, projectRoot: proj, config, ticket });
   await waitFor(() => rm.get(run.id)?.status !== "running");
 
-  // It was written to .henson/runs/<id>.json with its captured output.
-  const file = path.join(runsDir(proj), `${run.id}.json`);
-  const onDisk = JSON.parse(await fs.readFile(file, "utf8"));
-  assert.equal(onDisk.status, "done");
-  assert.equal(onDisk.ticketId, ticket.id);
-  assert.ok(onDisk.lines.some((l: { text: string }) => l.text.includes("did the work")));
+  // Metadata (committed) is written without the verbose output…
+  const meta = JSON.parse(await fs.readFile(path.join(runsDir(proj), `${run.id}.json`), "utf8"));
+  assert.equal(meta.status, "done");
+  assert.equal(meta.ticketId, ticket.id);
+  assert.ok(meta.hostname, "metadata records the hostname");
+  assert.equal(meta.lines, undefined, "metadata is committed without output");
+  // …and the output lives in a separate, gitignored log file.
+  const log = await fs.readFile(path.join(runsDir(proj), `${run.id}.log`), "utf8");
+  assert.ok(log.includes("did the work"));
 
-  // A fresh manager (simulating a server restart) loads the history back.
+  // A fresh manager (simulating a server restart) loads the history back, with logs.
   const fresh = new RunManager();
-  const loaded = await fresh.hydrate([proj]);
+  const loaded = await fresh.hydrate([{ projectId: config.id, projectRoot: proj }]);
   assert.equal(loaded, 1);
   const restored = fresh.get(run.id);
   assert.equal(restored?.status, "done");
+  assert.equal(restored?.logAvailable, true);
+  assert.ok(restored?.lines.some((l) => l.text.includes("did the work")));
   assert.equal(fresh.listByProject(config.id)[0]?.id, run.id);
 });
 
@@ -193,20 +231,18 @@ test("hydrate marks runs orphaned by a crashed process as stopped", async () => 
   await fs.mkdir(runsDir(proj), { recursive: true });
   const orphan = {
     id: "orphan123",
-    projectId: "p1",
-    projectRoot: proj,
     ticketId: "t1",
     ticketTitle: "Interrupted",
     companion: "Test",
+    hostname: os.hostname(), // ran on THIS machine, so it's genuinely orphaned
     status: "running",
     command: "claude",
     startedAt: new Date().toISOString(),
-    lines: [{ stream: "system", text: "▶ started", at: new Date().toISOString() }],
   };
   await fs.writeFile(path.join(runsDir(proj), "orphan123.json"), JSON.stringify(orphan), "utf8");
 
   const rm = new RunManager();
-  await rm.hydrate([proj]);
+  await rm.hydrate([{ projectId: "p1", projectRoot: proj }]);
   const run = rm.get("orphan123");
   assert.equal(run?.status, "stopped");
   assert.ok(run?.endedAt);

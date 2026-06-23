@@ -39,7 +39,7 @@ export const RECIPES: Recipe[] = [
     description:
       "The companion does everything itself. Best for small tickets and quick fixes.",
     git: CURRENT_BRANCH,
-    roles: [{ role: "generalist", description: "Plans, implements, tests and ships the ticket end to end." }],
+    roles: [{ role: "soloist", description: "Plans, implements, tests and ships the ticket end to end." }],
   },
   {
     id: "fullstack",

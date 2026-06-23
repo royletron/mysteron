@@ -3,6 +3,7 @@ import { useGlobalEvents, useHashRoute } from "./hooks";
 import { Home } from "./Home";
 import { Project } from "./Project";
 import { TicketPage } from "./TicketPage";
+import { Avatar } from "./Avatar";
 
 export interface AppEvent {
   seq: number;
@@ -23,7 +24,7 @@ export function App() {
     <div>
       <header class="sticky top-0 z-10 flex items-center gap-3 border-b border-zinc-800 bg-zinc-950/80 px-6 py-3 backdrop-blur">
         <a href="#/" class="flex items-center gap-2">
-          <span class="text-2xl">🎭</span>
+          <Avatar seed="Henson" variant="marble" size={26} />
           <span class="text-xl font-bold tracking-wide">Henson</span>
         </a>
         <span class="text-sm italic text-zinc-500">puppeteering your agents</span>

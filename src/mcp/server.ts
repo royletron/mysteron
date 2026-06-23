@@ -44,14 +44,15 @@ export async function buildMcpServer(
     "project_info",
     {
       description:
-        "Get this project's identity: companion name/avatar, enabled plugins, yolo mode and available agent-team recipes.",
+        "Get this project's identity: companion roster (name + role), recipe, enabled plugins, yolo mode and available agent-team recipes.",
       inputSchema: {},
     },
     async () =>
       json({
         id: config.id,
         name: config.name,
-        companion: config.companion,
+        recipe: config.recipe,
+        companions: config.companions.map((c) => ({ id: c.id, name: c.name, role: c.role })),
         plugins: config.plugins,
         yolo: config.yolo,
         recipes: RECIPES.map((r) => ({ id: r.id, name: r.name })),

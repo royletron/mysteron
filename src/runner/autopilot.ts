@@ -1,5 +1,6 @@
 import { bus, type AutopilotStatus } from "../core/events.js";
-import { nextTicket } from "../core/board.js";
+import { nextTicketForCompanion } from "../core/board.js";
+import { loadProjectConfig } from "../core/project.js";
 import { usageMonitorPlugin } from "../plugins/usage-monitor/index.js";
 import type { ProjectConfig } from "../core/types.js";
 import type { RunManager } from "./manager.js";
@@ -56,7 +57,7 @@ export class Autopilot {
     return Boolean(s && s.status !== "stopped");
   }
 
-  start(projectId: string, projectRoot: string, config: ProjectConfig): AutopilotState {
+  start(projectId: string, projectRoot: string): AutopilotState {
     const existing = this.states.get(projectId);
     if (existing && existing.status !== "stopped") return existing;
 
@@ -72,7 +73,7 @@ export class Autopilot {
     this.states.set(projectId, state);
     this.stopFlags.set(projectId, false);
     this.set(state, "running", "Autopilot started.");
-    void this.loop(state, config);
+    void this.loop(state);
     return state;
   }
 
@@ -84,9 +85,16 @@ export class Autopilot {
     return true;
   }
 
-  private async loop(state: AutopilotState, config: ProjectConfig): Promise<void> {
+  private async loop(state: AutopilotState): Promise<void> {
     while (!this.stopFlags.get(state.projectId)) {
-      // 1) Respect the usage budget.
+      const config = await loadProjectConfig(state.projectRoot);
+      if (!config) {
+        this.set(state, "idle", "Project is not initialised.");
+        await this.sleep(state, IDLE_POLL_MS());
+        continue;
+      }
+
+      // 1) Respect the usage budget — pause all companions until the window resets.
       const budget = await this.checkBudget(state.projectRoot, config);
       if (budget && !budget.safeToContinue) {
         this.set(
@@ -99,43 +107,47 @@ export class Autopilot {
         continue;
       }
 
-      // 2) Pull the next ready ticket (claiming happens when the run starts).
-      const ticket = await nextTicket(state.projectRoot, { claim: false });
-      if (!ticket) {
-        this.set(state, "idle", "No ready tickets — waiting for work.");
-        await this.sleep(state, IDLE_POLL_MS());
-        continue;
-      }
-
-      // 3) Run an agent on it and wait for completion.
-      this.set(state, "running", `Working ticket: ${ticket.title}`, { currentTicketId: ticket.id });
-      this.addActivity(state, `▶ ${ticket.title}`);
-      let runId: string | undefined;
-      try {
-        const run = await this.runs.start({
-          projectId: state.projectId,
-          projectRoot: state.projectRoot,
-          config,
-          ticket,
+      // 2) Per companion: if it's free, dispatch its next ready ticket. Each
+      //    companion does one task at a time; the soloist also takes unassigned ones.
+      let anyWork = false;
+      for (const companion of config.companions) {
+        if (this.stopFlags.get(state.projectId)) break;
+        if (this.runs.activeForCompanion(state.projectId, companion.id)) {
+          anyWork = true;
+          continue;
+        }
+        const ticket = await nextTicketForCompanion(state.projectRoot, companion.id, {
+          includeUnassigned: companion.role === "soloist",
         });
-        runId = run.id;
-        state.currentRunId = run.id;
-        const finished = await this.runs.waitFor(run.id);
-        if (finished.status === "done") state.completed++;
-        this.addActivity(
-          state,
-          `${finished.status === "done" ? "✓" : "✖"} ${ticket.title} — ${finished.status}`,
-        );
-      } catch (err) {
-        this.addActivity(state, `✖ ${ticket.title} — ${(err as Error).message}`);
-      } finally {
-        state.currentRunId = undefined;
-        state.currentTicketId = undefined;
-        if (runId) this.set(state, state.status, state.message); // emit cleared run id
+        if (!ticket) continue;
+        anyWork = true;
+        try {
+          const run = await this.runs.start({
+            projectId: state.projectId,
+            projectRoot: state.projectRoot,
+            config,
+            ticket,
+          });
+          this.addActivity(state, `▶ ${companion.name} → ${ticket.title}`);
+          // Log completion without blocking the tick (so other companions dispatch).
+          void this.runs.waitFor(run.id).then((finished) => {
+            if (finished.status === "done") state.completed++;
+            const icon = finished.status === "done" ? "✓" : finished.status === "stopped" ? "■" : "✖";
+            this.addActivity(state, `${icon} ${companion.name}: ${ticket.title} — ${finished.status}`);
+            this.set(state, state.status, state.message);
+          });
+        } catch (err) {
+          this.addActivity(state, `✖ ${companion.name}: ${(err as Error).message}`);
+        }
       }
 
-      // 4) Breather before the next ticket (keeps stop responsive).
-      await this.sleep(state, BREATHER_MS());
+      const busy = this.runs.busyCompanionIds(state.projectId).length;
+      if (busy > 0) this.set(state, "running", `${busy} companion(s) working.`);
+      else this.set(state, "idle", "No ready tickets for a free companion — waiting for work.");
+
+      // Tick quickly while there's work (so a freed companion picks up its next
+      // ticket promptly); poll slowly when fully idle.
+      await this.sleep(state, anyWork ? BREATHER_MS() : IDLE_POLL_MS());
     }
     if (state.status !== "stopped") this.set(state, "stopped", "Autopilot stopped.");
   }

@@ -8,6 +8,7 @@ import {
   loadProjectConfig,
   loadRegistry,
   unregisterProject,
+  type ProjectConfig,
 } from "./core/index.js";
 import { initProject } from "./core/project.js";
 import { registerProject } from "./core/registry.js";
@@ -15,6 +16,11 @@ import { startStdioMcp } from "./mcp/server.js";
 import { serve } from "./server/index.js";
 
 type Flags = Record<string, string | boolean>;
+
+/** Short, human-readable companion roster: "Kermit (soloist), Gonzo (backend)". */
+function roster(config: ProjectConfig): string {
+  return config.companions.map((c) => `${c.name} (${c.role})`).join(", ") || "(none)";
+}
 
 function parseArgs(argv: string[]): { positionals: string[]; flags: Flags } {
   const positionals: string[] = [];
@@ -75,22 +81,21 @@ async function main(): Promise<void> {
         {
           name: typeof flags.name === "string" ? flags.name : undefined,
           yolo: Boolean(flags.yolo),
+          recipe: typeof flags.recipe === "string" ? flags.recipe : undefined,
           importDocs: flags["no-import"] ? false : undefined,
         },
       );
       if (adopted) {
-        console.log(
-          `Adopted existing Henson project "${config.name}" ${config.companion.avatar}  (${config.companion.name}).`,
-        );
+        console.log(`Adopted existing Henson project "${config.name}" (recipe: ${config.recipe}).`);
+        console.log(`  Companions: ${roster(config)}`);
         console.log(
           `  Shared board, docs and memory from .henson/ are reused — same identity (${config.id}) as elsewhere.`,
         );
         console.log(`  Registered on this machine. Run "henson serve" to view it.`);
         break;
       }
-      console.log(
-        `${repaired ? "Repaired" : "Initialised"} "${config.name}" ${config.companion.avatar}  Companion: ${config.companion.name}`,
-      );
+      console.log(`${repaired ? "Repaired" : "Initialised"} "${config.name}" (recipe: ${config.recipe})`);
+      console.log(`  Companions: ${roster(config)}`);
       if (repaired) {
         console.log(`  (found a .henson/ folder without a config — wrote a new one, kept existing board/docs/memory)`);
       }
@@ -111,9 +116,7 @@ async function main(): Promise<void> {
       const name = cfg?.name ?? path.basename(abs);
       const entry = await registerProject(abs, name, cfg?.id);
       if (cfg) {
-        console.log(
-          `Adopted ${entry.name} ${cfg.companion.avatar} (${cfg.companion.name}) [${entry.id}] -> ${entry.path}`,
-        );
+        console.log(`Adopted ${entry.name} [${entry.id}] -> ${entry.path}\n  Companions: ${roster(cfg)}`);
       } else {
         console.log(
           `Registered ${entry.name} [${entry.id}] -> ${entry.path}\n  Note: no .henson/config.json here — run "henson init ${positionals[0]}" to set it up.`,
@@ -135,9 +138,8 @@ async function main(): Promise<void> {
       }
       for (const p of reg.projects) {
         const cfg = await loadProjectConfig(p.path);
-        const av = cfg?.companion.avatar ?? "❓";
-        const comp = cfg?.companion.name ?? "(uninitialised)";
-        console.log(`${av}  ${p.name}  [${p.id}]  ${comp}\n    ${p.path}`);
+        const comp = cfg ? roster(cfg) : "(uninitialised)";
+        console.log(`🎭  ${p.name}  [${p.id}]  ${comp}\n    ${p.path}`);
       }
       break;
     }

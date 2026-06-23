@@ -3,13 +3,15 @@ import { api, type ProjectDetail } from "./api";
 import { useAsync } from "./hooks";
 import { ErrorBox, Loading } from "./ui";
 import { Board } from "./Board";
-import { DocsTab, MemoryTab, PluginsTab, CompanionTab } from "./tabs";
+import { DocsTab, MemoryTab, PluginsTab, CompanionTab, CommitsTab } from "./tabs";
+import { Avatar } from "./Avatar";
 import type { AppEvent } from "./App";
 
 const TABS: [string, string][] = [
   ["board", "Board"],
   ["docs", "Docs"],
   ["memory", "Memory"],
+  ["commits", "Commits"],
   ["plugins", "Plugins & usage"],
   ["agent", "Companion"],
 ];
@@ -71,11 +73,11 @@ export function Project({ projectId, evt }: { projectId: string; evt: AppEvent }
         <a href="#/" class="btn btn-ghost btn-sm">
           ←
         </a>
-        <div class="text-3xl leading-none">{c.companion.avatar}</div>
+        <Avatar seed={data.entry.name} variant="marble" size={34} />
         <div>
           <h1 class="text-xl font-semibold">{data.entry.name}</h1>
           <div class="text-sm text-zinc-400">
-            {c.companion.name} · recipe: {c.companion.recipe || "solo"}
+            {c.companions.length} companion{c.companions.length === 1 ? "" : "s"} · recipe: {c.recipe}
           </div>
         </div>
         <div class="flex-1" />
@@ -126,6 +128,7 @@ export function Project({ projectId, evt }: { projectId: string; evt: AppEvent }
       {tab === "board" && <Board detail={data} evt={evt} reload={reload} />}
       {tab === "docs" && <DocsTab detail={data} />}
       {tab === "memory" && <MemoryTab detail={data} />}
+      {tab === "commits" && <CommitsTab detail={data} />}
       {tab === "plugins" && <PluginsTab detail={data} />}
       {tab === "agent" && <CompanionTab detail={data} />}
     </div>

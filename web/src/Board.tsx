@@ -4,11 +4,13 @@ import {
   PRIORITY_BORDER,
   STATE_LABELS,
   api,
+  type Companion,
   type ProjectDetail,
   type Ticket,
   type TicketState,
 } from "./api";
 import { TicketPanel } from "./TicketPanel";
+import { Avatar } from "./Avatar";
 import type { AppEvent } from "./App";
 
 function runTicketUrl(projectId: string, ticketId: string): string {
@@ -17,6 +19,8 @@ function runTicketUrl(projectId: string, ticketId: string): string {
 
 export function Board({ detail, evt, reload }: { detail: ProjectDetail; evt: AppEvent; reload: () => void }) {
   const projectId = detail.entry.id;
+  const byId = new Map(detail.config.companions.map((c) => [c.id, c]));
+  const busy = new Set(detail.busyCompanions ?? []);
   const [dragOver, setDragOver] = useState<TicketState | null>(null);
   const [editing, setEditing] = useState<Ticket | "new" | null>(null);
 
@@ -65,7 +69,14 @@ export function Board({ detail, evt, reload }: { detail: ProjectDetail; evt: App
                 <span class="rounded-full bg-zinc-800 px-2 py-0.5">{tickets.length}</span>
               </div>
               {tickets.map((t) => (
-                <TicketCard key={t.id} projectId={projectId} t={t} onEdit={() => setEditing(t)} />
+                <TicketCard
+                  key={t.id}
+                  projectId={projectId}
+                  t={t}
+                  companion={t.companionId ? byId.get(t.companionId) : undefined}
+                  busy={Boolean(t.companionId && busy.has(t.companionId))}
+                  onEdit={() => setEditing(t)}
+                />
               ))}
             </div>
           );
@@ -76,6 +87,7 @@ export function Board({ detail, evt, reload }: { detail: ProjectDetail; evt: App
         <TicketPanel
           projectId={projectId}
           ticket={editing === "new" ? null : editing}
+          companions={detail.config.companions}
           evt={evt}
           onClose={() => setEditing(null)}
           onSaved={() => {
@@ -88,7 +100,19 @@ export function Board({ detail, evt, reload }: { detail: ProjectDetail; evt: App
   );
 }
 
-function TicketCard({ projectId, t, onEdit }: { projectId: string; t: Ticket; onEdit: () => void }) {
+function TicketCard({
+  projectId,
+  t,
+  companion,
+  busy,
+  onEdit,
+}: {
+  projectId: string;
+  t: Ticket;
+  companion?: Companion;
+  busy: boolean;
+  onEdit: () => void;
+}) {
   return (
     <div
       draggable
@@ -100,18 +124,25 @@ function TicketCard({ projectId, t, onEdit }: { projectId: string; t: Ticket; on
         <div class="text-sm font-medium">{t.title}</div>
         <button
           class="btn btn-sm shrink-0 px-2 py-0.5 text-emerald-400 opacity-60 hover:opacity-100"
-          title="Run an agent on this ticket (opens a live view)"
+          disabled={busy}
+          title={busy ? `${companion?.name ?? "Companion"} is busy with another ticket` : "Run an agent on this ticket (opens a live view)"}
           onClick={(e) => {
             e.stopPropagation();
-            window.open(runTicketUrl(projectId, t.id), "_blank");
+            if (!busy) window.open(runTicketUrl(projectId, t.id), "_blank");
           }}
         >
-          ▶
+          {busy ? "●" : "▶"}
         </button>
       </div>
       <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
         <span class="tag">{t.priority}</span>
-        {t.assignee && <span class="tag">@{t.assignee}</span>}
+        {companion ? (
+          <span class="tag inline-flex items-center gap-1">
+            <Avatar companion={companion} size={14} /> {companion.name}
+          </span>
+        ) : t.assignee ? (
+          <span class="tag">@{t.assignee}</span>
+        ) : null}
         {(t.labels || []).map((l) => (
           <span key={l} class="tag">
             {l}

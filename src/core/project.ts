@@ -2,7 +2,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { nanoid } from "nanoid";
 import { discoverProjectDocs, type DiscoveredKind } from "./discover.js";
-import { generateCompanion } from "./names.js";
+import { buildRoster, migrateConfig, needsMigration, seedCompanionSpecs } from "./companions.js";
 import {
   ETIQUETTE_DOC,
   SPEC_DOC,
@@ -48,12 +48,20 @@ _Describe what this project is and what "done" looks like._
 }
 
 export async function loadProjectConfig(projectRoot: string): Promise<ProjectConfig | undefined> {
+  let parsed: Record<string, unknown>;
   try {
-    const raw = await fs.readFile(projectConfigPath(projectRoot), "utf8");
-    return JSON.parse(raw) as ProjectConfig;
+    parsed = JSON.parse(await fs.readFile(projectConfigPath(projectRoot), "utf8"));
   } catch {
     return undefined;
   }
+  // Migrate pre-roster configs (single `companion`) to companions[] once, in place.
+  if (needsMigration(parsed)) {
+    const migrated = migrateConfig(parsed);
+    await saveProjectConfig(projectRoot, migrated).catch(() => undefined);
+    await seedCompanionSpecs(projectRoot, migrated).catch(() => undefined);
+    return migrated;
+  }
+  return parsed as unknown as ProjectConfig;
 }
 
 export async function saveProjectConfig(
@@ -72,6 +80,8 @@ export interface InitOptions {
   name?: string;
   plugins?: string[];
   yolo?: boolean;
+  /** Agent-team recipe id; drives the companion roster. Defaults to "solo". */
+  recipe?: string;
   /** Import docs already present in the project (default true). */
   importDocs?: boolean;
 }
@@ -165,15 +175,18 @@ export async function initProject(
   await writeIfAbsent(specPath, defaultSpec(name));
   await writeIfAbsent(etiquettePath, DEFAULT_ETIQUETTE);
 
+  const recipe = opts.recipe ?? "solo";
   const config: ProjectConfig = {
     id: nanoid(8),
     name,
-    companion: { ...generateCompanion(), recipe: "solo" },
+    recipe,
+    companions: buildRoster(recipe),
     plugins: opts.plugins ?? ["usage-monitor"],
     yolo: opts.yolo ?? false,
     createdAt: new Date().toISOString(),
   };
   await saveProjectConfig(abs, config);
+  await seedCompanionSpecs(abs, config);
   await registerProject(abs, name, config.id);
   return { config, importedDocs, alreadyInitialised: false, adopted: false, repaired };
 }

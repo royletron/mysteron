@@ -1,10 +1,12 @@
 import { useState } from "preact/hooks";
-import { api, STATE_LABELS, type DiscoveredDoc, type ProjectListItem, type TicketState } from "./api";
+import { api, STATE_LABELS, type DiscoveredDoc, type ProjectListItem, type Recipe, type TicketState } from "./api";
 import { useAsync } from "./hooks";
 import { ErrorBox, Loading, Modal } from "./ui";
+import { Avatar } from "./Avatar";
 import type { AppEvent } from "./App";
 
-const COLUMN_ORDER: TicketState[] = ["backlog", "ready", "in-progress", "review", "done"];
+// Card omits "backlog" (it's the unstarted pile) and shows four equal-width counts.
+const CARD_COUNTS: TicketState[] = ["ready", "in-progress", "review", "done"];
 
 export function Home({ evt }: { evt: AppEvent }) {
   const { data, error, loading, reload } = useAsync(
@@ -54,13 +56,21 @@ export function Home({ evt }: { evt: AppEvent }) {
 }
 
 function ProjectCard({ p }: { p: ProjectListItem }) {
+  const companions = p.companions ?? [];
+  const lead = companions.find((c) => c.role === "soloist") ?? companions[0];
   return (
     <a href={`#/project/${p.id}`} class="card block transition hover:-translate-y-0.5 hover:border-violet-500">
       <div class="flex items-center gap-3">
-        <div class="text-3xl leading-none">{p.companion?.avatar ?? "❓"}</div>
+        <Avatar seed={p.name} variant="marble" size={36} />
         <div>
           <div class="text-base font-semibold">{p.name}</div>
-          <div class="text-sm text-zinc-400">{p.companion?.name ?? "(uninitialised)"}</div>
+          <div class="text-sm text-zinc-400">
+            {companions.length === 0
+              ? "(uninitialised)"
+              : companions.length === 1
+                ? `${lead.name} · ${lead.role}`
+                : `${companions.length} companions · ${p.recipe}`}
+          </div>
         </div>
       </div>
 
@@ -78,11 +88,11 @@ function ProjectCard({ p }: { p: ProjectListItem }) {
         {!p.valid && <span class="badge">⚠ not initialised</span>}
       </div>
 
-      <div class="mt-3.5 flex flex-wrap gap-2.5">
-        {COLUMN_ORDER.map((s) => (
-          <div key={s} class="flex min-w-[46px] flex-col items-center">
+      <div class="mt-3.5 grid grid-cols-4 gap-2">
+        {CARD_COUNTS.map((s) => (
+          <div key={s} class="flex flex-col items-center">
             <b class={`text-lg ${s === "done" ? "text-emerald-400" : ""}`}>{p.counts?.[s] ?? 0}</b>
-            <span class="text-[10px] uppercase tracking-wide text-zinc-500">{STATE_LABELS[s]}</span>
+            <span class="text-center text-[10px] uppercase tracking-wide text-zinc-500">{STATE_LABELS[s]}</span>
           </div>
         ))}
       </div>
@@ -95,9 +105,12 @@ function ProjectCard({ p }: { p: ProjectListItem }) {
 function NewProjectModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const [path, setPath] = useState("");
   const [name, setName] = useState("");
+  const [recipe, setRecipe] = useState("solo");
   const [found, setFound] = useState<DiscoveredDoc[] | null>(null);
   const [scanning, setScanning] = useState(false);
   const [err, setErr] = useState("");
+  const recipes = useAsync(() => api<{ recipes: Recipe[] }>("/api/recipes"), []);
+  const chosen = recipes.data?.recipes.find((r) => r.id === recipe);
 
   const scan = async () => {
     if (!path.trim()) return;
@@ -121,7 +134,7 @@ function NewProjectModal({ onClose, onCreated }: { onClose: () => void; onCreate
     try {
       await api("/api/projects/init", {
         method: "POST",
-        body: JSON.stringify({ path: path.trim(), name: name.trim() || undefined }),
+        body: JSON.stringify({ path: path.trim(), name: name.trim() || undefined, recipe }),
       });
       onCreated();
     } catch (e) {
@@ -158,6 +171,20 @@ function NewProjectModal({ onClose, onCreated }: { onClose: () => void; onCreate
         value={name}
         onInput={(e) => setName((e.target as HTMLInputElement).value)}
       />
+
+      <label class="field-label">Team recipe</label>
+      <select class="input" value={recipe} onChange={(e) => setRecipe((e.target as HTMLSelectElement).value)}>
+        {(recipes.data?.recipes ?? [{ id: "solo", name: "Solo" } as Recipe]).map((r) => (
+          <option key={r.id} value={r.id}>
+            {r.name}
+          </option>
+        ))}
+      </select>
+      {chosen && (
+        <p class="mt-1 text-xs text-zinc-500">
+          {chosen.description} Companions: {chosen.roles.map((x) => x.role).join(", ")}.
+        </p>
+      )}
 
       {scanning && <p class="mt-2 text-sm text-zinc-500">Scanning…</p>}
       {found && found.length > 0 && (

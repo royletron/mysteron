@@ -3,14 +3,19 @@ import {
   api,
   fmtBytes,
   fmtNum,
+  fmtWhen,
+  type Commit,
+  type Companion,
   type ProjectConfig,
   type ProjectDetail,
   type Recipe,
+  type RunSummary,
   type UsageBudget,
 } from "./api";
 import { useAsync } from "./hooks";
 import { Markdown } from "./Markdown";
 import { CodeEditor } from "./CodeEditor";
+import { Avatar } from "./Avatar";
 import { Modal } from "./ui";
 
 type DocMode = "preview" | "split" | "edit";
@@ -317,17 +322,14 @@ export function CompanionTab({ detail }: { detail: ProjectDetail }) {
     2,
   );
   const recipes = useAsync(() => api<{ recipes: Recipe[] }>("/api/recipes"), []);
-  const [recipe, setRecipe] = useState(c.companion.recipe || "solo");
-  const [companion, setCompanion] = useState({ name: c.companion.name, avatar: c.companion.avatar });
   const [saving, setSaving] = useState("");
-  const [regenerating, setRegenerating] = useState(false);
 
   const choose = async (id: string) => {
-    if (id === recipe || saving) return;
+    if (id === c.recipe || saving) return;
+    if (!confirm(`Switch to the "${id}" recipe? This rebuilds the companion roster for this project.`)) return;
     setSaving(id);
     try {
       await api(`/api/projects/${detail.entry.id}/config`, { method: "PATCH", body: JSON.stringify({ recipe: id }) });
-      setRecipe(id);
     } catch (e) {
       alert((e as Error).message);
     } finally {
@@ -335,39 +337,28 @@ export function CompanionTab({ detail }: { detail: ProjectDetail }) {
     }
   };
 
-  const regenerate = async () => {
-    if (regenerating) return;
-    setRegenerating(true);
-    try {
-      const { config } = await api<{ config: ProjectConfig }>(`/api/projects/${detail.entry.id}/config`, {
-        method: "PATCH",
-        body: JSON.stringify({ regenerateCompanion: true }),
-      });
-      setCompanion({ name: config.companion.name, avatar: config.companion.avatar });
-    } catch (e) {
-      alert((e as Error).message);
-    } finally {
-      setRegenerating(false);
-    }
-  };
-
   return (
     <div>
       <div class="card">
-        <div class="flex items-center gap-3">
-          <div class="text-4xl leading-none">{companion.avatar}</div>
-          <div>
-            <h2 class="text-lg font-semibold">{companion.name}</h2>
-            <div class="text-sm text-zinc-400">Companion for {detail.entry.name}</div>
-          </div>
+        <div class="flex items-center">
+          <h2 class="text-lg font-semibold">Companions</h2>
           <div class="flex-1" />
-          <button class="btn" disabled={regenerating} onClick={regenerate} title="Roll a new name and avatar">
-            {regenerating ? "Regenerating…" : "🎲 Regenerate"}
-          </button>
+          <span class="text-sm text-zinc-400">recipe: {c.recipe}</span>
+        </div>
+        <p class="text-sm text-zinc-400">
+          The named agents that work this project. Roles come from the recipe; edit each one's brief below.
+        </p>
+        <div class="mt-2 flex flex-col gap-2">
+          {c.companions.map((comp) => (
+            <CompanionRow
+              key={comp.id}
+              projectId={detail.entry.id}
+              companion={comp}
+              activeRun={(detail.activeRuns ?? []).find((r) => r.companionId === comp.id)}
+            />
+          ))}
         </div>
         <div class="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
-          <b class="text-zinc-400">Active recipe</b>
-          <span>{recipe}</span>
           <b class="text-zinc-400">Yolo mode</b>
           <span>{c.yolo ? "⚡ on — may work autonomously within usage budget" : "off"}</span>
           <b class="text-zinc-400">Plugins</b>
@@ -381,16 +372,16 @@ export function CompanionTab({ detail }: { detail: ProjectDetail }) {
         <h2 class="text-lg font-semibold">Connect an agent</h2>
         <p class="text-sm text-zinc-400">Give Claude Code (or any MCP client) access to this project's board, docs and memory:</p>
         <label class="field-label">Run the MCP server</label>
-        <textarea class="input h-[42px] font-mono text-xs" readOnly value={cmd} />
+        <CodeEditor class="input p-0 text-xs" language="text" readOnly value={cmd} />
         <label class="field-label">…or add to your MCP client config</label>
-        <textarea class="input min-h-[140px] font-mono text-xs" readOnly value={mcpJson} />
+        <CodeEditor class="input min-h-[140px] p-0 text-xs" language="text" readOnly value={mcpJson} />
       </div>
 
       <div class="card mt-4">
         <h2 class="text-lg font-semibold">Agent-team recipes</h2>
         <p class="text-sm text-zinc-400">Toggle the companion onto a recipe. It sets the team roles and how the agents use git.</p>
         {(recipes.data?.recipes ?? []).map((r) => {
-          const active = r.id === recipe;
+          const active = r.id === c.recipe;
           return (
             <div
               key={r.id}
@@ -428,6 +419,146 @@ export function CompanionTab({ detail }: { detail: ProjectDetail }) {
   );
 }
 
+export function CommitsTab({ detail }: { detail: ProjectDetail }) {
+  const { data, loading } = useAsync(
+    () => api<{ commits: Commit[] }>(`/api/projects/${detail.entry.id}/commits`),
+    [detail.entry.id],
+  );
+  const commits = data?.commits ?? [];
+  return (
+    <div class="card">
+      <h2 class="text-lg font-semibold">Commits</h2>
+      <p class="text-sm text-zinc-400">
+        Recent git history. Commits a companion made carry a <code>Henson-Companion</code> trailer and show their avatar.
+      </p>
+      {loading && !data ? (
+        <div class="mt-2 text-sm text-zinc-500">Loading…</div>
+      ) : commits.length === 0 ? (
+        <div class="mt-2 text-sm text-zinc-500">No commits yet (or this project isn't a git repo).</div>
+      ) : (
+        <div class="mt-2 flex flex-col">
+          {commits.map((commit) => (
+            <div key={commit.hash} class="flex items-center gap-3 border-b border-zinc-800/60 py-2 last:border-0">
+              {commit.companionRef ? (
+                <Avatar companion={commit.companionRef} size={26} />
+              ) : (
+                <span class="inline-block h-[26px] w-[26px] shrink-0 rounded-full bg-zinc-800" />
+              )}
+              <code class="shrink-0 text-xs text-zinc-500">{commit.shortHash}</code>
+              <span class="flex-1 truncate text-sm" title={commit.subject}>
+                {commit.subject}
+              </span>
+              <span class="shrink-0 text-xs text-zinc-500">
+                {commit.companionRef?.name ?? commit.author} · {fmtWhen(commit.date)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CompanionRow({
+  projectId,
+  companion,
+  activeRun,
+}: {
+  projectId: string;
+  companion: Companion;
+  activeRun?: RunSummary;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [spec, setSpec] = useState<string | null>(null);
+  const [status, setStatus] = useState("");
+
+  const regenerate = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await api(`/api/projects/${projectId}/config`, {
+        method: "PATCH",
+        body: JSON.stringify({ regenerateCompanionId: companion.id }),
+      });
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const toggleBrief = async () => {
+    if (editing) {
+      setEditing(false);
+      return;
+    }
+    setEditing(true);
+    if (spec === null) {
+      const { content } = await api<{ content: string }>(
+        `/api/projects/${projectId}/companions/${companion.id}/spec`,
+      );
+      setSpec(content);
+    }
+  };
+
+  const saveBrief = async () => {
+    await api(`/api/projects/${projectId}/companions/${companion.id}/spec`, {
+      method: "PUT",
+      body: JSON.stringify({ content: spec ?? "" }),
+    });
+    setStatus("saved ✓");
+    setTimeout(() => setStatus(""), 2000);
+  };
+
+  return (
+    <div class="rounded-lg border border-zinc-800 p-2.5">
+      <div class="flex items-center gap-3">
+        <Avatar companion={companion} size={34} />
+        <div>
+          <div class="font-medium">{companion.name}</div>
+          {activeRun ? (
+            <a
+              class="text-xs text-emerald-400"
+              href={`#/project/${projectId}/ticket/${activeRun.ticketId}`}
+              title="See what they're doing"
+            >
+              ● working: {activeRun.ticketTitle} — view live →
+            </a>
+          ) : (
+            <div class="text-xs text-zinc-500">{companion.role} · idle</div>
+          )}
+        </div>
+        <div class="flex-1" />
+        <button class="btn btn-sm" onClick={toggleBrief}>
+          {editing ? "Hide brief" : "Edit brief"}
+        </button>
+        <button class="btn btn-sm" disabled={busy} title="Roll a new name + avatar (keeps the session)" onClick={regenerate}>
+          {busy ? "…" : "🎲"}
+        </button>
+      </div>
+      {editing && (
+        <div class="mt-2">
+          <CodeEditor
+            class="input min-h-[160px] p-0 text-xs"
+            value={spec ?? ""}
+            onChange={setSpec}
+            onSave={saveBrief}
+            placeholder="Write the companion's brief… (markdown supported)"
+          />
+          <div class="mt-1 flex items-center gap-2">
+            <span class="text-xs text-emerald-400">{status}</span>
+            <div class="flex-1" />
+            <button class="btn btn-primary btn-sm" onClick={saveBrief}>
+              Save brief
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PermissionsCard({ projectId, config }: { projectId: string; config: ProjectConfig }) {
   const [allowed, setAllowed] = useState((config.allowedTools ?? []).join("\n"));
   const [disallowed, setDisallowed] = useState((config.disallowedTools ?? []).join("\n"));
@@ -461,20 +592,24 @@ function PermissionsCard({ projectId, config }: { projectId: string; config: Pro
       <div class="grid grid-cols-2 gap-3">
         <div>
           <label class="field-label">Allowed tools</label>
-          <textarea
-            class="input min-h-[120px] font-mono text-xs"
+          <CodeEditor
+            class="input min-h-[120px] p-0 text-xs"
+            language="text"
             placeholder={"Edit\nWrite\nBash(npm test:*)\nBash(git *)"}
             value={allowed}
-            onInput={(e) => setAllowed((e.target as HTMLTextAreaElement).value)}
+            onChange={setAllowed}
+            onSave={save}
           />
         </div>
         <div>
           <label class="field-label">Disallowed tools</label>
-          <textarea
-            class="input min-h-[120px] font-mono text-xs"
+          <CodeEditor
+            class="input min-h-[120px] p-0 text-xs"
+            language="text"
             placeholder={"Bash(rm *)\nWebFetch"}
             value={disallowed}
-            onInput={(e) => setDisallowed((e.target as HTMLTextAreaElement).value)}
+            onChange={setDisallowed}
+            onSave={save}
           />
         </div>
       </div>

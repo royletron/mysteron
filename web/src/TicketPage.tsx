@@ -12,6 +12,7 @@ import {
 } from "./api";
 import { useAsync, useRunStream } from "./hooks";
 import { ErrorBox, Loading } from "./ui";
+import { Avatar } from "./Avatar";
 import type { AppEvent } from "./App";
 
 interface TicketData {
@@ -123,6 +124,7 @@ export function TicketPage({
     );
 
   const c = detail.config;
+  const lead = c.companions.find((x) => x.role === "soloist") ?? c.companions[0];
   const active = runs.find((r) => r.status === "running");
   const selectedRun = runs.find((r) => r.id === selectedRunId);
   const status = liveStatus?.status ?? selectedRun?.status;
@@ -151,11 +153,12 @@ export function TicketPage({
         <a href={`#/project/${projectId}`} class="btn btn-ghost btn-sm">
           ← board
         </a>
-        <div class="text-3xl leading-none">{c.companion.avatar}</div>
+        {lead ? <Avatar companion={lead} size={34} /> : null}
         <div>
           <h1 class="text-xl font-semibold">{ticket.title}</h1>
           <div class="text-sm text-zinc-400">
-            {detail.entry.name} · {c.companion.name}
+            {detail.entry.name}
+            {lead ? ` · ${lead.name}` : ""}
           </div>
         </div>
         <div class="flex-1" />
@@ -222,10 +225,20 @@ export function TicketPage({
         <div class="card">
           <div class="mb-1.5 text-xs text-zinc-500">Live agent output</div>
           <div class="min-h-[52vh] rounded-sm border border-zinc-800 bg-black/70 p-3 font-mono text-xs leading-relaxed">
-            {lines.length === 0 && <div class="text-zinc-600">Waiting for the agent…</div>}
-            {lines.map((l, i) => (
-              <LogLine key={i} stream={l.stream} text={l.text} />
-            ))}
+            {selectedRun && selectedRun.logAvailable === false ? (
+              <div class="text-zinc-400">
+                🖥 This run was performed by {selectedRun.companion} on{" "}
+                <span class="text-zinc-200">{selectedRun.hostname}</span>. Its logs are local to that machine —
+                only the run record syncs via git.
+              </div>
+            ) : (
+              <>
+                {lines.length === 0 && <div class="text-zinc-600">Waiting for the agent…</div>}
+                {lines.map((l, i) => (
+                  <LogLine key={i} stream={l.stream} text={l.text} />
+                ))}
+              </>
+            )}
           </div>
         </div>
       </div>

@@ -41,7 +41,7 @@ export async function serve(opts: ServeOptions = {}): Promise<{ port: number; cl
   const runs = new RunManager();
   // Load persisted agent-run history so a ticket's past runs survive restarts.
   const registry = await loadRegistry();
-  const loaded = await runs.hydrate(registry.projects.map((p) => p.path));
+  const loaded = await runs.hydrate(registry.projects.map((p) => ({ projectId: p.id, projectRoot: p.path })));
   if (verbose && loaded) console.log(`[henson] loaded ${loaded} persisted run(s)`);
   const autopilot = new Autopilot(runs);
 

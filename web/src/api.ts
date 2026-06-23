@@ -9,6 +9,7 @@ export interface Ticket {
   title: string;
   state: TicketState;
   priority: TicketPriority;
+  companionId?: string;
   assignee?: string;
   labels: string[];
   created: string;
@@ -17,15 +18,17 @@ export interface Ticket {
 }
 
 export interface Companion {
+  id: string;
   name: string;
-  avatar: string;
-  recipe?: string;
+  role: string;
+  avatarSeed: string;
 }
 
 export interface ProjectConfig {
   id: string;
   name: string;
-  companion: Companion;
+  recipe: string;
+  companions: Companion[];
   plugins: string[];
   yolo: boolean;
   allowedTools?: string[];
@@ -49,7 +52,8 @@ export interface ProjectListItem {
   id: string;
   name: string;
   path: string;
-  companion?: Companion;
+  recipe?: string;
+  companions: Companion[];
   yolo: boolean;
   plugins: string[];
   counts: Record<TicketState, number>;
@@ -79,6 +83,10 @@ export interface ProjectDetail {
   memories: MemorySummary[];
   pendingDocSync: boolean;
   autopilot: AutopilotState;
+  /** Companion ids currently running a task. */
+  busyCompanions: string[];
+  /** Runs currently in flight (one per busy companion). */
+  activeRuns: RunSummary[];
 }
 
 export interface RunLine {
@@ -93,12 +101,15 @@ export interface RunSummary {
   id: string;
   ticketId: string;
   ticketTitle: string;
+  companionId?: string;
   companion: string;
+  hostname?: string;
   status: RunStatus;
   command: string;
   startedAt: string;
   endedAt?: string;
   exitCode?: number | null;
+  logAvailable?: boolean;
   lineCount: number;
 }
 
@@ -130,6 +141,16 @@ export interface UsageBudget {
 export interface RecipeGit {
   strategy: "current-branch" | "new-branch";
   branchPrefix?: string;
+}
+
+export interface Commit {
+  hash: string;
+  shortHash: string;
+  author: string;
+  date: string;
+  subject: string;
+  companion?: string;
+  companionRef?: Companion;
 }
 
 export interface Recipe {

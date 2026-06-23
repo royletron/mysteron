@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "preact/hooks";
 import { EditorState } from "@codemirror/state";
-import { EditorView, keymap, drawSelection, highlightActiveLine } from "@codemirror/view";
+import { EditorView, keymap, drawSelection, highlightActiveLine, placeholder as placeholderExt } from "@codemirror/view";
 import { history, defaultKeymap, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { syntaxHighlighting, HighlightStyle } from "@codemirror/language";
 import { markdown } from "@codemirror/lang-markdown";
@@ -48,11 +48,19 @@ export function CodeEditor({
   value,
   onChange,
   onSave,
+  language = "markdown",
+  readOnly = false,
+  placeholder,
   class: className = "",
 }: {
   value: string;
-  onChange: (value: string) => void;
+  onChange?: (value: string) => void;
   onSave?: () => void;
+  // Markdown highlights prose syntax; "text" keeps the monospace chrome for
+  // config/JSON fields where markdown markers would mislead.
+  language?: "markdown" | "text";
+  readOnly?: boolean;
+  placeholder?: string;
   class?: string;
 }) {
   const host = useRef<HTMLDivElement>(null);
@@ -80,13 +88,16 @@ export function CodeEditor({
         drawSelection(),
         highlightActiveLine(),
         EditorView.lineWrapping,
-        markdown({ codeLanguages: languages }),
-        syntaxHighlighting(highlight),
+        ...(language === "markdown"
+          ? [markdown({ codeLanguages: languages }), syntaxHighlighting(highlight)]
+          : []),
+        ...(readOnly ? [EditorState.readOnly.of(true), EditorView.editable.of(false)] : []),
+        ...(placeholder ? [placeholderExt(placeholder)] : []),
         keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
         saveKey,
         theme,
         EditorView.updateListener.of((u) => {
-          if (u.docChanged) onChangeRef.current(u.state.doc.toString());
+          if (u.docChanged) onChangeRef.current?.(u.state.doc.toString());
         }),
       ],
     });

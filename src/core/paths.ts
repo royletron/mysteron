@@ -36,5 +36,10 @@ export function runsDir(projectRoot: string): string {
   return path.join(projectHensonDir(projectRoot), "runs");
 }
 
+/** Companion role-spec docs, e.g. <project>/.henson/companions/<id>.md */
+export function companionsDir(projectRoot: string): string {
+  return path.join(projectHensonDir(projectRoot), "companions");
+}
+
 export const ETIQUETTE_DOC = "ETIQUETTE.md";
 export const SPEC_DOC = "SPEC.md";

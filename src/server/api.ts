@@ -13,6 +13,11 @@ import {
   updateTicket,
   writeDoc,
   regenerateCompanion,
+  buildRoster,
+  seedCompanionSpecs,
+  readCompanionSpec,
+  writeCompanionSpec,
+  recentCommits,
   type ProjectConfig,
   type RegistryEntry,
 } from "../core/index.js";
@@ -23,7 +28,7 @@ import { TICKET_STATES } from "../core/types.js";
 import { allPlugins, enabledPlugins } from "../plugins/manager.js";
 import { usageMonitorPlugin } from "../plugins/usage-monitor/index.js";
 import type { ProjectWatcher } from "../core/watcher.js";
-import { type RunManager, runSummary } from "../runner/manager.js";
+import { type RunManager, runSummary, CompanionBusyError } from "../runner/manager.js";
 import type { Autopilot } from "../runner/autopilot.js";
 import type { RunEvent } from "../core/events.js";
 
@@ -107,7 +112,8 @@ export function registerApi(
       for (const t of tickets) counts[t.state]++;
       projects.push({
         ...entry,
-        companion: config?.companion,
+        recipe: config?.recipe,
+        companions: config?.companions ?? [],
         yolo: config?.yolo ?? false,
         plugins: config?.plugins ?? [],
         counts,
@@ -133,12 +139,15 @@ export function registerApi(
   });
 
   app.post("/api/projects/init", async (req: Request, res: Response) => {
-    const { path: projectPath, name, importDocs } = req.body ?? {};
+    const { path: projectPath, name, importDocs, recipe } = req.body ?? {};
     if (!projectPath || typeof projectPath !== "string") {
       return res.status(400).json({ error: "path is required" });
     }
+    if (recipe && !findRecipe(recipe)) {
+      return res.status(400).json({ error: `unknown recipe: ${recipe}` });
+    }
     try {
-      const result = await initProject(projectPath, { name, importDocs });
+      const result = await initProject(projectPath, { name, importDocs, recipe });
       res.json(result);
     } catch (err) {
       res.status(500).json({ error: (err as Error).message });
@@ -166,6 +175,8 @@ export function registerApi(
       memories: await listMemories(r.entry.path),
       pendingDocSync: watcher.pendingSyncs().some((p) => p.projectId === r.entry.id),
       autopilot: autopilot.status(r.entry.id) ?? { status: "stopped", message: "", completed: 0, activity: [] },
+      busyCompanions: runs.busyCompanionIds(r.entry.id),
+      activeRuns: runs.listByProject(r.entry.id).filter((x) => x.status === "running").map(runSummary),
     });
   });
 
@@ -174,29 +185,72 @@ export function registerApi(
     res.json({ ok: true });
   });
 
+  // Recent git commits, with companions attributed via the Henson-Companion trailer.
+  app.get("/api/projects/:id/commits", async (req: Request, res: Response) => {
+    const r = await resolve(req.params.id);
+    if (!r) return notFound(res);
+    const commits = await recentCommits(r.entry.path, 50);
+    const byName = new Map(r.config.companions.map((c) => [c.name, c]));
+    res.json({
+      commits: commits.map((commit) => ({
+        ...commit,
+        companionRef: commit.companion ? byName.get(commit.companion) : undefined,
+      })),
+    });
+  });
+
   // Update editable project settings (yolo, default recipe).
   app.patch("/api/projects/:id/config", async (req: Request, res: Response) => {
     const r = await resolve(req.params.id);
     if (!r) return notFound(res);
-    const { yolo, recipe, allowedTools, disallowedTools, regenerateCompanion: regen } = (req.body ?? {}) as {
+    const { yolo, recipe, allowedTools, disallowedTools, regenerateCompanionId } = (req.body ?? {}) as {
       yolo?: boolean;
       recipe?: string;
       allowedTools?: string[];
       disallowedTools?: string[];
-      regenerateCompanion?: boolean;
+      regenerateCompanionId?: string;
     };
-    const next = { ...r.config };
+    const next = { ...r.config, companions: [...r.config.companions] };
     if (typeof yolo === "boolean") next.yolo = yolo;
-    if (typeof recipe === "string") {
-      if (!findRecipe(recipe)) return res.status(400).json({ error: `unknown recipe: ${recipe}` });
-      next.companion = { ...next.companion, recipe };
-    }
-    if (regen) next.companion = { ...next.companion, ...regenerateCompanion(next.companion) };
     if (Array.isArray(allowedTools)) next.allowedTools = allowedTools.map(String).filter((t) => t.trim());
     if (Array.isArray(disallowedTools)) next.disallowedTools = disallowedTools.map(String).filter((t) => t.trim());
+    // Changing the recipe rebuilds the companion roster.
+    if (typeof recipe === "string" && recipe !== next.recipe) {
+      if (!findRecipe(recipe)) return res.status(400).json({ error: `unknown recipe: ${recipe}` });
+      next.recipe = recipe;
+      next.companions = buildRoster(recipe);
+    }
+    // Regenerate a single companion's name/avatar (keeps its id + session).
+    if (typeof regenerateCompanionId === "string") {
+      next.companions = next.companions.map((c) => {
+        if (c.id !== regenerateCompanionId) return c;
+        const { name } = regenerateCompanion(c);
+        return { ...c, name, avatarSeed: name };
+      });
+    }
     await saveProjectConfig(r.entry.path, next);
+    await seedCompanionSpecs(r.entry.path, next);
     bus.emitEvent({ type: "config-changed", projectId: r.entry.id });
     res.json({ config: next });
+  });
+
+  // Companion role-spec docs (seeded from the recipe, editable here).
+  app.get("/api/projects/:id/companions/:companionId/spec", async (req: Request, res: Response) => {
+    const r = await resolve(req.params.id);
+    if (!r) return notFound(res);
+    const content = await readCompanionSpec(r.entry.path, req.params.companionId);
+    res.json({ content: content ?? "" });
+  });
+
+  app.put("/api/projects/:id/companions/:companionId/spec", async (req: Request, res: Response) => {
+    const r = await resolve(req.params.id);
+    if (!r) return notFound(res);
+    if (typeof req.body?.content !== "string") {
+      return res.status(400).json({ error: "content is required" });
+    }
+    await writeCompanionSpec(r.entry.path, req.params.companionId, req.body.content);
+    bus.emitEvent({ type: "config-changed", projectId: r.entry.id });
+    res.json({ ok: true });
   });
 
   // --- Tickets -------------------------------------------------------------
@@ -210,7 +264,14 @@ export function registerApi(
     const r = await resolve(req.params.id);
     if (!r) return notFound(res);
     if (!req.body?.title) return res.status(400).json({ error: "title is required" });
-    const ticket = await createTicket(r.entry.path, req.body);
+    // Default the assignee to the soloist (or the sole companion) — "defaults to
+    // soloist if that's all there is"; multi-companion projects stay unassigned.
+    const fallback =
+      r.config.companions.find((c) => c.role === "soloist") ??
+      (r.config.companions.length === 1 ? r.config.companions[0] : undefined);
+    const companionId = req.body.companionId ?? fallback?.id;
+    const assignee = r.config.companions.find((c) => c.id === companionId)?.name;
+    const ticket = await createTicket(r.entry.path, { ...req.body, companionId, assignee });
     bus.emitEvent({ type: "board-changed", projectId: r.entry.id, detail: ticket.id });
     res.json({ ticket });
   });
@@ -218,7 +279,12 @@ export function registerApi(
   app.patch("/api/projects/:id/tickets/:ticketId", async (req: Request, res: Response) => {
     const r = await resolve(req.params.id);
     if (!r) return notFound(res);
-    const ticket = await updateTicket(r.entry.path, req.params.ticketId, req.body ?? {});
+    const patch = { ...(req.body ?? {}) };
+    // Keep the display assignee in sync when (re)assigning to a companion.
+    if ("companionId" in patch) {
+      patch.assignee = r.config.companions.find((c) => c.id === patch.companionId)?.name ?? undefined;
+    }
+    const ticket = await updateTicket(r.entry.path, req.params.ticketId, patch);
     if (!ticket) return notFound(res);
     bus.emitEvent({ type: "board-changed", projectId: r.entry.id, detail: ticket.id });
     res.json({ ticket });
@@ -239,13 +305,18 @@ export function registerApi(
     if (!r) return notFound(res);
     const ticket = await getTicket(r.entry.path, req.params.ticketId);
     if (!ticket) return notFound(res);
-    const run = await runs.start({
-      projectId: r.entry.id,
-      projectRoot: r.entry.path,
-      config: r.config,
-      ticket,
-    });
-    res.json({ run: runSummary(run) });
+    try {
+      const run = await runs.start({
+        projectId: r.entry.id,
+        projectRoot: r.entry.path,
+        config: r.config,
+        ticket,
+      });
+      res.json({ run: runSummary(run) });
+    } catch (err) {
+      if (err instanceof CompanionBusyError) return res.status(409).json({ error: err.message });
+      throw err;
+    }
   });
 
   app.get("/api/projects/:id/runs", async (req: Request, res: Response) => {
@@ -302,7 +373,7 @@ export function registerApi(
   app.post("/api/projects/:id/autopilot/start", async (req: Request, res: Response) => {
     const r = await resolve(req.params.id);
     if (!r) return notFound(res);
-    const state = autopilot.start(r.entry.id, r.entry.path, r.config);
+    const state = autopilot.start(r.entry.id, r.entry.path);
     res.json({ autopilot: state });
   });
 

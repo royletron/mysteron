@@ -1,10 +1,34 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
+/*
+ * Palette (colorhunt 450693 / 8C00FF / FF3F7F / FFC400), kept dark. We remap
+ * Tailwind's accent scales so the whole app rebrands without touching markup:
+ * `violet-*` → 8C00FF (primary), `cyan-*` → FF3F7F (secondary/info),
+ * `amber-*` → FFC400 (running/yolo). `emerald`/`red` keep success/error meaning;
+ * deep indigo 450693 tints the background.
+ */
+@theme {
+  --color-violet-300: #b98cff;
+  --color-violet-400: #a14dff;
+  --color-violet-500: #8c00ff;
+  --color-violet-600: #7a00e6;
+  --color-violet-700: #6200bd;
+
+  --color-cyan-300: #ff7aa6;
+  --color-cyan-400: #ff3f7f;
+  --color-cyan-500: #e62e6c;
+
+  --color-amber-300: #ffd454;
+  --color-amber-400: #ffc400;
+  --color-amber-500: #e6b000;
+}
+
 @layer base {
   body {
-    @apply bg-zinc-950 text-zinc-100 antialiased;
-    background-image: radial-gradient(1200px 600px at 80% -10%, rgb(26 31 46) 0%, rgb(9 9 11) 55%);
+    @apply text-zinc-100 antialiased;
+    background-color: #0c0a14;
+    background-image: radial-gradient(1100px 560px at 82% -12%, #2a0a5e 0%, #170a33 28%, #0c0a14 60%);
     min-height: 100vh;
   }
   a {
@@ -23,7 +47,8 @@
     @apply px-2 py-1 text-xs;
   }
   .btn-primary {
-    @apply border-violet-500 bg-violet-600 font-semibold text-white hover:brightness-110;
+    @apply border-transparent font-semibold text-white hover:brightness-110;
+    background-image: linear-gradient(90deg, #8c00ff, #ff3f7f);
   }
   .btn-ghost {
     @apply border-transparent bg-transparent;

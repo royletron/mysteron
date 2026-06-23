@@ -18,6 +18,9 @@ export interface Ticket {
   title: string;
   state: TicketState;
   priority: TicketPriority;
+  /** Id of the companion this ticket is assigned to (see ProjectConfig.companions). */
+  companionId?: string;
+  /** Human-readable assignee (the companion's name at assign time); for display. */
   assignee?: string;
   labels: string[];
   created: string;
@@ -26,19 +29,36 @@ export interface Ticket {
   body: string;
 }
 
-export interface CompanionConfig {
-  /** Randomly generated fun name, e.g. "Kermit the Compiler". */
+/**
+ * A companion is a first-class, named agent identity that lives with the
+ * project (committed in .henson/config.json, so every machine agrees who's who).
+ * Its role comes from the project's recipe; runs of a companion are per-machine.
+ */
+export interface Companion {
+  /** Stable id, also used as the Claude session id for conversation continuity. */
+  id: string;
+  /** Fun generated name, e.g. "Kermit the Compiler". */
   name: string;
-  /** Emoji avatar. */
+  /** Role id from the recipe, e.g. "soloist", "designer", "backend". */
+  role: string;
+  /** Seed for the boring-avatars avatar (kept stable even if renamed). */
+  avatarSeed: string;
+}
+
+/** @deprecated Pre-roster single-companion shape; migrated to {@link Companion}[]. */
+export interface CompanionConfig {
+  name: string;
   avatar: string;
-  /** Default agent-team recipe id used when delegating work. */
   recipe?: string;
 }
 
 export interface ProjectConfig {
   id: string;
   name: string;
-  companion: CompanionConfig;
+  /** The chosen agent-team recipe (drives the companion roster). */
+  recipe: string;
+  /** The project's companions, one per role in the recipe. */
+  companions: Companion[];
   /** Enabled plugin ids. */
   plugins: string[];
   /** When true the companion may work autonomously without per-step approval. */
