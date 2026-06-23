@@ -182,12 +182,6 @@ export const STATE_LABELS: Record<TicketState, string> = {
   done: "Done",
 };
 
-export const PRIORITY_BORDER: Record<TicketPriority, string> = {
-  high: "border-l-red-400",
-  medium: "border-l-amber-400",
-  low: "border-l-zinc-500",
-};
-
 type StatusInfo = { label: string; color: string; live?: boolean };
 
 export const RUN_STATUS: Record<RunStatus, StatusInfo> = {

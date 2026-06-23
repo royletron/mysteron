@@ -1,8 +1,9 @@
 import { useState } from "preact/hooks";
-import { api, type ProjectDetail } from "./api";
+import { api, type ProjectDetail, type Ticket } from "./api";
 import { useAsync } from "./hooks";
 import { ErrorBox, Loading } from "./ui";
 import { Board } from "./Board";
+import { TicketPanel } from "./TicketPanel";
 import { DocsTab, MemoryTab, PluginsTab, CompanionTab, CommitsTab } from "./tabs";
 import { Avatar } from "./Avatar";
 import type { AppEvent } from "./App";
@@ -19,6 +20,7 @@ const TABS: [string, string][] = [
 export function Project({ projectId, evt }: { projectId: string; evt: AppEvent }) {
   const [tab, setTab] = useState("board");
   const [savingYolo, setSavingYolo] = useState(false);
+  const [editing, setEditing] = useState<Ticket | "new" | null>(null);
   const matchSeq = evt.projectId === projectId ? evt.seq : -1;
   const { data, error, loading, reload } = useAsync(
     () => api<ProjectDetail>(`/api/projects/${projectId}`),
@@ -39,6 +41,12 @@ export function Project({ projectId, evt }: { projectId: string; evt: AppEvent }
     );
 
   const c = data.config;
+  const apActive = Boolean(data.autopilot && data.autopilot.status !== "stopped");
+
+  const setAutopilot = async (action: "start" | "stop") => {
+    await api(`/api/projects/${projectId}/autopilot/${action}`, { method: "POST" });
+    reload();
+  };
 
   const unregister = async () => {
     if (!confirm(`Unregister "${data.entry.name}"? This only removes it from Henson's registry — files stay on disk.`))
@@ -111,7 +119,7 @@ export function Project({ projectId, evt }: { projectId: string; evt: AppEvent }
         </div>
       )}
 
-      <div class="mb-4 flex gap-1.5 border-b border-zinc-800">
+      <div class="sticky top-[52px] z-10 -mx-6 mb-4 flex items-center gap-1.5 border-b border-zinc-800 bg-zinc-950/80 px-6 backdrop-blur">
         {TABS.map(([key, label]) => (
           <button
             key={key}
@@ -123,14 +131,49 @@ export function Project({ projectId, evt }: { projectId: string; evt: AppEvent }
             {label}
           </button>
         ))}
+        <div class="flex-1" />
+        {tab === "board" && (
+          <div class="flex items-center gap-2">
+            <button class="btn btn-primary btn-sm" onClick={() => setEditing("new")}>
+              + Add ticket
+            </button>
+            {apActive ? (
+              <button class="btn btn-danger btn-sm" onClick={() => setAutopilot("stop")}>
+                ■ Stop autopilot
+              </button>
+            ) : (
+              <button
+                class="btn btn-sm"
+                title="Pulls ready tickets one at a time and runs the companion on each, within the usage budget"
+                onClick={() => setAutopilot("start")}
+              >
+                🤖 Start autopilot
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
-      {tab === "board" && <Board detail={data} evt={evt} reload={reload} />}
+      {tab === "board" && <Board detail={data} onEdit={setEditing} reload={reload} />}
       {tab === "docs" && <DocsTab detail={data} />}
       {tab === "memory" && <MemoryTab detail={data} />}
       {tab === "commits" && <CommitsTab detail={data} />}
       {tab === "plugins" && <PluginsTab detail={data} />}
       {tab === "agent" && <CompanionTab detail={data} />}
+
+      {editing && (
+        <TicketPanel
+          projectId={projectId}
+          ticket={editing === "new" ? null : editing}
+          companions={c.companions}
+          evt={evt}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null);
+            reload();
+          }}
+        />
+      )}
     </div>
   );
 }
