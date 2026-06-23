@@ -2,6 +2,7 @@ export * from "./types.js";
 export * from "./paths.js";
 export * from "./registry.js";
 export * from "./project.js";
+export * from "./discover.js";
 export * from "./board.js";
 export * from "./docs.js";
 export * from "./memory.js";

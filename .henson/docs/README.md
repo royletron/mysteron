@@ -18,7 +18,7 @@ account's rolling-window limits.
 
 ```bash
 npm install
-npm run build           # builds the server (tsc) and the web UI (Vite) into dist/
+npm run build           # compiles to dist/ and copies the web UI
 npm link                # optional: puts `henson` on your PATH
 
 # Initialise Henson inside any project folder
@@ -43,7 +43,6 @@ my-app/
     docs/ETIQUETTE.md     # the rules every agent must follow
     docs/*.md             # any other shared docs
     memory/*.md           # saved facts (Claude-memory format)
-    runs/<runId>.json     # agent-run history (local; gitignored by default)
 ```
 
 A central registry lives at `~/.henson/registry.json` (override with `HENSON_HOME`).
@@ -103,75 +102,6 @@ Or add it to your MCP client (e.g. Claude Code `.mcp.json`):
 `next_ticket { claim: true }` pops the highest-priority `ready` ticket and moves
 it to `in-progress` — the basic loop for an autonomous board run.
 
-## Running agents on tickets (the ▶ play button)
-
-Each ticket on the board has a **▶ play button**. Pressing it:
-
-1. Moves the ticket to `in-progress` and assigns it to the companion.
-2. Launches an agent in the project directory to work the ticket (the prompt
-   includes the ticket, the etiquette, and a SPEC excerpt).
-3. Opens the ticket's **live view** in a new tab — a dedicated page
-   (`#/project/<id>/ticket/<ticketId>`) that streams the agent's stdout/stderr
-   in real time (via SSE), with **Stop** and **Run again** controls and a history
-   of past runs you can replay.
-
-### What agent gets launched
-
-By default Henson runs **Claude Code headless**:
-
-```
-claude -p "<ticket prompt>" --permission-mode acceptEdits   # or bypassPermissions in yolo
-```
-
-The agent runs with `cwd` set to the project, and these env vars are exported:
-`HENSON_PROJECT`, `HENSON_PROJECT_PATH`, `HENSON_TICKET_ID`, `HENSON_TICKET_TITLE`,
-`HENSON_TICKET_PROMPT`, `HENSON_YOLO`.
-
-Override the command to use any agent CLI (it receives the prompt on stdin as
-well as in `HENSON_TICKET_PROMPT`):
-
-```bash
-export HENSON_AGENT_CMD='my-agent --task "$HENSON_TICKET_TITLE"'   # global
-```
-
-…or per-project in `.henson/config.json`:
-
-```json
-{ "agent": { "command": "my-agent", "args": ["--headless"] } }
-```
-
-Runs stream over `GET /api/runs/:runId/stream` and can be stopped via
-`POST /api/runs/:runId/stop`. Each run is also **persisted** to
-`.henson/runs/<runId>.json` (output included) and reloaded on startup, so a
-ticket's agent history survives a server restart — the live view's run list lets
-you replay any past run. A run left mid-flight by a killed server is shown as
-`stopped` on reload.
-
-> To have the agent update the ticket itself (move it to `review`, leave notes),
-> give it this project's MCP server — see *Connecting an agent* above.
-
-## Board autopilot (the yolo autopilot)
-
-The board has a **🤖 Start autopilot** control. Once started, Henson:
-
-1. Pulls the highest-priority `ready` ticket and runs an agent on it (claiming it
-   to `in-progress`), waits for that run to finish, then pulls the next.
-2. Before each ticket it checks the **usage budget** (the usage-monitor plugin).
-   When the budget is reached it **pauses**, waits for the rolling window to
-   reset, and then resumes — so a board can churn for hours/days without
-   exceeding your Claude account limits.
-3. Goes **idle** when there are no `ready` tickets and keeps watching, so you can
-   keep adding tickets and it picks them up.
-
-The board shows live status (`running / paused / idle`), the current ticket (with
-a "view live →" link to its log), tickets completed this session, and a recent
-activity feed. Pair it with **yolo mode** (`henson init --yolo`) for hands-off,
-permission-free runs.
-
-API: `POST /api/projects/:id/autopilot/start`, `…/stop`, `GET …/autopilot`.
-Tune the loop timing with `HENSON_AUTOPILOT_IDLE_MS`, `HENSON_AUTOPILOT_BUDGET_MS`,
-`HENSON_AUTOPILOT_BREATHER_MS`.
-
 ## Agent-team recipes
 
 A companion can work `solo` or delegate using a recipe (`fullstack`, `backend`,
@@ -206,7 +136,7 @@ henson init [path] [--name <name>] [--yolo]   Initialise Henson in a folder
 henson register <path>                         Register an existing project
 henson unregister <id|path>                    Remove from the registry
 henson list                                    List registered projects
-henson serve [--port <n>] [--host <h>] [-v]    Start the web UI + API (-v/--verbose for request/run logs)
+henson serve [--port <n>] [--host <h>]         Start the web UI + API
 henson mcp [id|path]                           Run the MCP server (stdio)
 henson ticket list <id|path>                   List tickets
 henson ticket add <id|path> <title...>         Add a ticket
@@ -215,18 +145,10 @@ henson ticket add <id|path> <title...>         Add a ticket
 ## Development
 
 ```bash
-npm run dev        # API (tsx watch :4319) + web UI (Vite HMR :5319) together
-npm start          # clean build, then serve the built app on :4319
+npm run dev        # serve with reload (tsx watch)
 npm test           # node:test suite
-npm run typecheck  # tsc --noEmit for server + web
-npm run build      # rm -rf dist → tsc (server) → vite (web → dist/server/public)
+npm run typecheck  # tsc --noEmit
 ```
-
-For UI work, run `npm run dev` (one command runs both servers via `concurrently`)
-and open `http://localhost:5319` — Vite HMR proxies `/api` to the API server. For
-a production-style run, `npm start` (always a fresh build) or `npm run build`
-then `henson serve`. The server sends `Cache-Control: no-cache` on `index.html`,
-so a rebuild is always picked up without a hard refresh.
 
 ## Architecture
 
@@ -234,11 +156,9 @@ so a rebuild is always picked up without a hard refresh.
 src/
   core/      registry, project, board, docs, memory, recipes, watcher, events
   mcp/       per-project MCP server (stdio)
-  server/    Express REST API + SSE; serves the built web UI
-  runner/    agent run manager + board autopilot
+  server/    Express REST API + SSE + dependency-free web UI (public/)
   plugins/   plugin interface + manager + usage-monitor
   cli.ts     the `henson` command
-web/         Preact + Vite + Tailwind web UI (builds to dist/server/public)
 ```
 
 Headless-friendly: `henson serve` on a server + the MCP servers per project means
@@ -246,10 +166,7 @@ you can drive everything from the web UI and connect agents from anywhere.
 
 ## Roadmap
 
-- ~~Start an agent on a ticket from the web UI with a live view~~ ✅
-- ~~A board-level "play" that pulls `ready` tickets one-by-one (yolo autopilot)~~ ✅
-- Recipe execution wired to a real sub-agent runner (teams, not just solo)
-- ~~Persist run history to disk so it survives restarts~~ ✅
-- Persist autopilot session history to disk (still in-memory per server process)
+- One-click "start companion session" from the web UI (spawn the agent runtime)
+- Recipe execution wired to a real sub-agent runner
 - Auto-derive draft tickets from spec diffs on `docs-changed`
 - More plugins (git/CI status, cost reporting, Slack notifications)

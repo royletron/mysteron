@@ -31,5 +31,10 @@ export function memoryDir(projectRoot: string): string {
   return path.join(projectHensonDir(projectRoot), "memory");
 }
 
+/** Where agent-run history is persisted, e.g. <project>/.henson/runs */
+export function runsDir(projectRoot: string): string {
+  return path.join(projectHensonDir(projectRoot), "runs");
+}
+
 export const ETIQUETTE_DOC = "ETIQUETTE.md";
 export const SPEC_DOC = "SPEC.md";

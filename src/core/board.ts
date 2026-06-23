@@ -19,7 +19,26 @@ function ticketPath(projectRoot: string, id: string): string {
 }
 
 function parseTicket(id: string, raw: string): Ticket {
-  const { data, content } = matter(raw);
+  let data: Record<string, unknown> = {};
+  let content = raw;
+  try {
+    const parsed = matter(raw);
+    data = parsed.data;
+    content = parsed.content;
+  } catch (err) {
+    // A malformed ticket file must not break the whole board — surface it as a
+    // readable placeholder instead of throwing (which would hang the request).
+    return {
+      id,
+      title: `⚠ ${id} (unparseable frontmatter)`,
+      state: "backlog",
+      priority: "medium",
+      labels: ["parse-error"],
+      created: now(),
+      updated: now(),
+      body: `This ticket could not be parsed: ${(err as Error).message}\n\n---\n${raw}`,
+    };
+  }
   const state = (data.state as TicketState) ?? "backlog";
   return {
     id,

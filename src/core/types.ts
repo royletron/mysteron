@@ -43,6 +43,23 @@ export interface ProjectConfig {
   plugins: string[];
   /** When true the companion may work autonomously without per-step approval. */
   yolo: boolean;
+  /**
+   * Tools the companion is allowed to use without prompting (Claude Code
+   * --allowedTools), e.g. "Edit", "Write", "Bash(npm test:*)". Lets you keep
+   * yolo off but still let the agent run specific things. Ignored when yolo is on
+   * (bypass mode allows everything).
+   */
+  allowedTools?: string[];
+  /** Tools the companion may never use (Claude Code --disallowedTools). */
+  disallowedTools?: string[];
+  /**
+   * How to launch the agent for a ticket. Defaults to Claude Code headless.
+   * Override here (or with the HENSON_AGENT_CMD env var) to use any agent CLI.
+   */
+  agent?: {
+    command: string;
+    args?: string[];
+  };
   createdAt: string;
 }
 

@@ -24,12 +24,15 @@ function parseArgs(argv: string[]): { positionals: string[]; flags: Flags } {
     if (a.startsWith("--")) {
       const key = a.slice(2);
       const next = argv[i + 1];
-      if (next && !next.startsWith("--")) {
+      if (next && !next.startsWith("-")) {
         flags[key] = next;
         i++;
       } else {
         flags[key] = true;
       }
+    } else if (a.startsWith("-") && a.length > 1 && !/^-\d/.test(a)) {
+      // Short boolean flag(s), e.g. -v.
+      for (const ch of a.slice(1)) flags[ch] = true;
     } else {
       positionals.push(a);
     }
@@ -40,11 +43,14 @@ function parseArgs(argv: string[]): { positionals: string[]; flags: Flags } {
 const HELP = `🎭  Henson — manage AI agents across your projects.
 
 Usage:
-  henson init [path] [--name <name>] [--yolo]   Initialise Henson in a project folder
+  henson init [path] [--name <name>] [--yolo] [--no-import]
+                                                 Initialise Henson in a project folder
+                                                 (imports existing docs unless --no-import)
   henson register <path>                         Register an existing Henson project
   henson unregister <id|path>                    Remove a project from the registry
   henson list                                    List registered projects
-  henson serve [--port <n>] [--host <h>]         Start the web UI + API
+  henson serve [--port <n>] [--host <h>] [-v|--verbose]
+                                                 Start the web UI + API (verbose logs requests/errors/runs)
   henson mcp [id|path]                           Run the MCP server (stdio) for a project
   henson ticket list <id|path>                   List a project's tickets
   henson ticket add <id|path> <title...>         Add a ticket (to backlog)
@@ -64,23 +70,55 @@ async function main(): Promise<void> {
 
   switch (cmd) {
     case "init": {
-      const config = await initProject(positionals[0] ?? process.cwd(), {
-        name: typeof flags.name === "string" ? flags.name : undefined,
-        yolo: Boolean(flags.yolo),
-      });
-      console.log(
-        `Initialised "${config.name}" ${config.companion.avatar}  Companion: ${config.companion.name}`,
+      const { config, importedDocs, adopted, repaired } = await initProject(
+        positionals[0] ?? process.cwd(),
+        {
+          name: typeof flags.name === "string" ? flags.name : undefined,
+          yolo: Boolean(flags.yolo),
+          importDocs: flags["no-import"] ? false : undefined,
+        },
       );
+      if (adopted) {
+        console.log(
+          `Adopted existing Henson project "${config.name}" ${config.companion.avatar}  (${config.companion.name}).`,
+        );
+        console.log(
+          `  Shared board, docs and memory from .henson/ are reused — same identity (${config.id}) as elsewhere.`,
+        );
+        console.log(`  Registered on this machine. Run "henson serve" to view it.`);
+        break;
+      }
+      console.log(
+        `${repaired ? "Repaired" : "Initialised"} "${config.name}" ${config.companion.avatar}  Companion: ${config.companion.name}`,
+      );
+      if (repaired) {
+        console.log(`  (found a .henson/ folder without a config — wrote a new one, kept existing board/docs/memory)`);
+      }
       console.log(`  plugins: ${config.plugins.join(", ") || "(none)"}  yolo: ${config.yolo}`);
+      if (importedDocs.length) {
+        console.log(`  imported ${importedDocs.length} existing doc(s):`);
+        for (const d of importedDocs) {
+          console.log(`    ${d.from} → docs/${d.importName}${d.kind === "spec" ? "  (used as SPEC)" : ""}`);
+        }
+      }
       console.log(`Run "henson serve" then open the web UI to manage the board.`);
       break;
     }
     case "register": {
       if (!positionals[0]) throw new Error("register requires a <path>");
-      const cfg = await loadProjectConfig(path.resolve(positionals[0]));
-      const name = cfg?.name ?? path.basename(path.resolve(positionals[0]));
-      const entry = await registerProject(positionals[0], name);
-      console.log(`Registered ${entry.name} (${entry.id}) -> ${entry.path}`);
+      const abs = path.resolve(positionals[0]);
+      const cfg = await loadProjectConfig(abs);
+      const name = cfg?.name ?? path.basename(abs);
+      const entry = await registerProject(abs, name, cfg?.id);
+      if (cfg) {
+        console.log(
+          `Adopted ${entry.name} ${cfg.companion.avatar} (${cfg.companion.name}) [${entry.id}] -> ${entry.path}`,
+        );
+      } else {
+        console.log(
+          `Registered ${entry.name} [${entry.id}] -> ${entry.path}\n  Note: no .henson/config.json here — run "henson init ${positionals[0]}" to set it up.`,
+        );
+      }
       break;
     }
     case "unregister": {
@@ -107,6 +145,7 @@ async function main(): Promise<void> {
       await serve({
         port: typeof flags.port === "string" ? Number(flags.port) : undefined,
         host: typeof flags.host === "string" ? flags.host : undefined,
+        verbose: Boolean(flags.verbose || flags.v),
       });
       break;
     }

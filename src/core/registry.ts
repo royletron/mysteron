@@ -24,17 +24,37 @@ export async function saveRegistry(reg: Registry): Promise<void> {
   await fs.writeFile(registryPath(), JSON.stringify(reg, null, 2) + "\n", "utf8");
 }
 
-/** Register a project path. If already registered (by path), returns the existing entry. */
+/**
+ * Register a project path. If already registered (by path), returns the
+ * existing entry. Pass `id` to reuse a project's committed config id so the
+ * project keeps the same identity across machines/clones.
+ */
 export async function registerProject(
   projectRoot: string,
   name: string,
+  id?: string,
 ): Promise<RegistryEntry> {
   const abs = path.resolve(projectRoot);
   const reg = await loadRegistry();
   const existing = reg.projects.find((p) => p.path === abs);
-  if (existing) return existing;
+  if (existing) {
+    // Keep the local entry's name/id in sync with the (possibly cloned) config.
+    let changed = false;
+    if (id && existing.id !== id) {
+      existing.id = id;
+      changed = true;
+    }
+    if (existing.name !== name) {
+      existing.name = name;
+      changed = true;
+    }
+    if (changed) await saveRegistry(reg);
+    return existing;
+  }
+  // Avoid id collisions if the same shared id is somehow already present.
+  const desiredId = id && !reg.projects.some((p) => p.id === id) ? id : nanoid(8);
   const entry: RegistryEntry = {
-    id: nanoid(8),
+    id: desiredId,
     name,
     path: abs,
     createdAt: new Date().toISOString(),

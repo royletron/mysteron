@@ -25,7 +25,8 @@ after(async () => {
 });
 
 test("initProject scaffolds config, docs and registers", async () => {
-  const config = await initProject(projectRoot, { name: "Demo" });
+  const { config, alreadyInitialised } = await initProject(projectRoot, { name: "Demo" });
+  assert.equal(alreadyInitialised, false);
   assert.equal(config.name, "Demo");
   assert.ok(config.companion.name.length > 0);
   assert.ok(config.companion.avatar.length > 0);
@@ -41,8 +42,62 @@ test("initProject scaffolds config, docs and registers", async () => {
 
   // Idempotent.
   const again = await initProject(projectRoot);
-  assert.equal(again.id, config.id);
+  assert.equal(again.alreadyInitialised, true);
+  assert.equal(again.config.id, config.id);
   assert.deepEqual(await loadProjectConfig(projectRoot), config);
+});
+
+test("init imports existing project docs (README, SPEC, docs/*)", async () => {
+  const root = path.join(tmp, "existing");
+  await fs.mkdir(path.join(root, "docs"), { recursive: true });
+  await fs.mkdir(path.join(root, "node_modules", "junk"), { recursive: true });
+  await fs.writeFile(path.join(root, "README.md"), "# Existing app\nhello");
+  await fs.writeFile(path.join(root, "SPECIFICATION.md"), "# Real spec\nthe truth");
+  await fs.writeFile(path.join(root, "docs", "ARCHITECTURE.md"), "# arch");
+  await fs.writeFile(path.join(root, "node_modules", "junk", "README.md"), "ignore me");
+
+  const { importedDocs } = await initProject(root, { name: "Existing" });
+  const names = importedDocs.map((d) => d.importName).sort();
+  assert.deepEqual(names, ["ARCHITECTURE.md", "README.md", "SPEC.md"]);
+
+  // SPECIFICATION.md should have seeded SPEC.md (not the placeholder).
+  assert.match((await readDoc(root, "SPEC.md")) ?? "", /the truth/);
+  assert.match((await readDoc(root, "README.md")) ?? "", /Existing app/);
+  // node_modules must be ignored.
+  assert.ok(!importedDocs.some((d) => d.from.includes("node_modules")));
+});
+
+test("init adopts an existing committed .henson (cloned-from-elsewhere)", async () => {
+  // Simulate a repo cloned from another machine: .henson/ is already present.
+  const root = path.join(tmp, "cloned");
+  await fs.mkdir(path.join(root, ".henson", "memory"), { recursive: true });
+  const sharedConfig = {
+    id: "shared01",
+    name: "Cloned App",
+    companion: { name: "Gonzo the Bold", avatar: "🦅", recipe: "fullstack" },
+    plugins: ["usage-monitor"],
+    yolo: true,
+    createdAt: "2025-01-01T00:00:00.000Z",
+  };
+  await fs.writeFile(path.join(root, ".henson", "config.json"), JSON.stringify(sharedConfig));
+  await fs.writeFile(path.join(root, ".henson", "memory", "team-convention.md"), "shared fact");
+
+  const res = await initProject(root, { name: "Ignored Name" });
+  assert.equal(res.adopted, true);
+  assert.equal(res.alreadyInitialised, true);
+  // Companion identity is preserved, not regenerated.
+  assert.equal(res.config.id, "shared01");
+  assert.equal(res.config.companion.name, "Gonzo the Bold");
+  assert.equal(res.config.yolo, true);
+
+  // Registry entry reuses the committed id so identity is stable across machines.
+  const reg = await loadRegistry();
+  const entry = reg.projects.find((p) => p.path === root);
+  assert.equal(entry?.id, "shared01");
+
+  // Shared memory travels with the clone.
+  const { listMemories } = await import("../src/core/memory.js");
+  assert.ok((await listMemories(root)).some((m) => m.name === "team-convention"));
 });
 
 test("tickets: create, list (priority sorted), update, next", async () => {

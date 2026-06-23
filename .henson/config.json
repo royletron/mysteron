@@ -1,0 +1,14 @@
+{
+  "id": "uYKEvded",
+  "name": "henson",
+  "companion": {
+    "name": "Waldorf the Compiler",
+    "avatar": "🚀",
+    "recipe": "solo"
+  },
+  "plugins": [
+    "usage-monitor"
+  ],
+  "yolo": true,
+  "createdAt": "2026-06-23T11:17:59.481Z"
+}
