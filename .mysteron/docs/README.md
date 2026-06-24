@@ -1,8 +1,8 @@
-# 🎭 Henson
+# 🎭 Mysteron
 
-> Named for Jim Henson — the best puppeteer that ever lived.
+> Named for the Mysterons — the unseen agents of Gerry Anderson's *Captain Scarlet*.
 
-Henson is a framework for managing AI agents across the projects on your machine.
+Mysteron is a framework for managing AI agents across the projects on your machine.
 Each project gets a shared **board**, a shared **docs** folder, **memory**, an
 **etiquette** contract, and a companion **agent** (with a fun name and avatar)
 that can do the work itself or delegate to a team of sub-agents.
@@ -19,24 +19,24 @@ account's rolling-window limits.
 ```bash
 npm install
 npm run build           # compiles to dist/ and copies the web UI
-npm link                # optional: puts `henson` on your PATH
+npm link                # optional: puts `mysteron` on your PATH
 
-# Initialise Henson inside any project folder
-henson init ~/code/my-app --name "My App"
+# Initialise Mysteron inside any project folder
+mysteron init ~/code/my-app --name "My App"
 
 # Start the web UI + API (default http://127.0.0.1:4319)
-henson serve
+mysteron serve
 ```
 
 Open the web UI, click into a project, and add tickets / edit the spec.
 
 ## How a project is stored
 
-Henson keeps everything as plain, git-friendly files inside the project:
+Mysteron keeps everything as plain, git-friendly files inside the project:
 
 ```
 my-app/
-  .henson/
+  .mysteron/
     config.json          # companion (name, avatar, recipe), plugins, yolo flag
     board/<id>.md         # one ticket per file (frontmatter: state, priority, …)
     docs/SPEC.md          # the specification
@@ -45,37 +45,37 @@ my-app/
     memory/*.md           # saved facts (Claude-memory format)
 ```
 
-A central registry lives at `~/.henson/registry.json` (override with `HENSON_HOME`).
+A central registry lives at `~/.mysteron/registry.json` (override with `MYSTERON_HOME`).
 The registry is **per-machine** (it just maps a project id to a local path); the
-`.henson/` folder is the **shared** state.
+`.mysteron/` folder is the **shared** state.
 
 Board states: `backlog → ready → in-progress → review → done`.
 
 ## Shared setup across machines (clones)
 
-Because everything lives in the project's `.henson/` folder, **commit it to git**.
+Because everything lives in the project's `.mysteron/` folder, **commit it to git**.
 When the repo is cloned on another machine (or by a teammate), the board, docs,
 **memory** and the companion's identity travel with it.
 
-On the new machine, just point Henson at the clone:
+On the new machine, just point Mysteron at the clone:
 
 ```bash
-henson init ./cloned-repo      # or: henson register ./cloned-repo
-# → "Adopted existing Henson project … same identity (abc12345) as elsewhere."
+mysteron init ./cloned-repo      # or: mysteron register ./cloned-repo
+# → "Adopted existing Mysteron project … same identity (abc12345) as elsewhere."
 ```
 
-Henson detects the committed `.henson/config.json` and **adopts** it instead of
+Mysteron detects the committed `.mysteron/config.json` and **adopts** it instead of
 generating a new companion — reusing the same project **id**, companion name/
 avatar, and shared memory. So agents on every machine follow the same path and
-share one memory. (If a `.henson/` folder is found but its config is missing or
-corrupt, Henson writes a fresh config and keeps your existing board/docs/memory.)
+share one memory. (If a `.mysteron/` folder is found but its config is missing or
+corrupt, Mysteron writes a fresh config and keeps your existing board/docs/memory.)
 
 ## Connecting an agent (MCP)
 
 Run the project's MCP server over stdio:
 
 ```bash
-henson mcp ~/code/my-app
+mysteron mcp ~/code/my-app
 ```
 
 Or add it to your MCP client (e.g. Claude Code `.mcp.json`):
@@ -83,7 +83,7 @@ Or add it to your MCP client (e.g. Claude Code `.mcp.json`):
 ```json
 {
   "mcpServers": {
-    "henson-my-app": { "command": "henson", "args": ["mcp", "/abs/path/to/my-app"] }
+    "mysteron-my-app": { "command": "mysteron", "args": ["mcp", "/abs/path/to/my-app"] }
   }
 }
 ```
@@ -123,23 +123,23 @@ Configure via env:
 
 | Variable | Default | Meaning |
 | -------- | ------- | ------- |
-| `HENSON_HOME` | `~/.henson` | Registry / global state location |
-| `HENSON_PORT` / `HENSON_HOST` | `4319` / `127.0.0.1` | Web server bind |
-| `HENSON_USAGE_TOKEN_LIMIT` | `2000000` | Billable-token ceiling per window |
-| `HENSON_USAGE_WINDOW_HOURS` | `5` | Rolling window length |
+| `MYSTERON_HOME` | `~/.mysteron` | Registry / global state location |
+| `MYSTERON_PORT` / `MYSTERON_HOST` | `4319` / `127.0.0.1` | Web server bind |
+| `MYSTERON_USAGE_TOKEN_LIMIT` | `2000000` | Billable-token ceiling per window |
+| `MYSTERON_USAGE_WINDOW_HOURS` | `5` | Rolling window length |
 | `CLAUDE_PROJECTS_DIR` | `~/.claude/projects` | Where transcripts are read from |
 
 ## CLI
 
 ```
-henson init [path] [--name <name>] [--yolo]   Initialise Henson in a folder
-henson register <path>                         Register an existing project
-henson unregister <id|path>                    Remove from the registry
-henson list                                    List registered projects
-henson serve [--port <n>] [--host <h>]         Start the web UI + API
-henson mcp [id|path]                           Run the MCP server (stdio)
-henson ticket list <id|path>                   List tickets
-henson ticket add <id|path> <title...>         Add a ticket
+mysteron init [path] [--name <name>] [--yolo]   Initialise Mysteron in a folder
+mysteron register <path>                         Register an existing project
+mysteron unregister <id|path>                    Remove from the registry
+mysteron list                                    List registered projects
+mysteron serve [--port <n>] [--host <h>]         Start the web UI + API
+mysteron mcp [id|path]                           Run the MCP server (stdio)
+mysteron ticket list <id|path>                   List tickets
+mysteron ticket add <id|path> <title...>         Add a ticket
 ```
 
 ## Development
@@ -158,10 +158,10 @@ src/
   mcp/       per-project MCP server (stdio)
   server/    Express REST API + SSE + dependency-free web UI (public/)
   plugins/   plugin interface + manager + usage-monitor
-  cli.ts     the `henson` command
+  cli.ts     the `mysteron` command
 ```
 
-Headless-friendly: `henson serve` on a server + the MCP servers per project means
+Headless-friendly: `mysteron serve` on a server + the MCP servers per project means
 you can drive everything from the web UI and connect agents from anywhere.
 
 ## Roadmap

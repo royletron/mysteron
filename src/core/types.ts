@@ -1,4 +1,4 @@
-/** Core domain types for Henson. */
+/** Core domain types for Mysteron. */
 
 export const TICKET_STATES = [
   "backlog",
@@ -38,7 +38,7 @@ export interface Ticket {
 
 /**
  * A companion is a first-class, named agent identity that lives with the
- * project (committed in .henson/config.json, so every machine agrees who's who).
+ * project (committed in .mysteron/config.json, so every machine agrees who's who).
  * Its role comes from the project's recipe; runs of a companion are per-machine.
  */
 export interface Companion {
@@ -81,7 +81,7 @@ export interface ProjectConfig {
   disallowedTools?: string[];
   /**
    * How to launch the agent for a ticket. Defaults to Claude Code headless.
-   * Override here (or with the HENSON_AGENT_CMD env var) to use any agent CLI.
+   * Override here (or with the MYSTERON_AGENT_CMD env var) to use any agent CLI.
    */
   agent?: {
     command: string;

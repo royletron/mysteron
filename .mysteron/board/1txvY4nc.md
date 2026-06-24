@@ -19,4 +19,4 @@ Done. The **← board** link previously lived in the page header, which scrolls 
 
 File: `web/src/TicketPage.tsx`.
 
-Verified: `npm run typecheck` clean, `vite build` succeeds, `npm test` 17/17 pass. Committed as `8467efb` with the `Henson-Companion: Waldorf the Compiler` trailer.
+Verified: `npm run typecheck` clean, `vite build` succeeds, `npm test` 17/17 pass. Committed as `8467efb` with the `Mysteron-Companion: Waldorf the Compiler` trailer.

@@ -27,6 +27,6 @@ Both done.
 - Tickets merely **blocked** (their companion is busy on a different ticket) now show a plain **disabled `▶`** button — no pulse (title "… is busy with another ticket").
 - Idle tickets show the normal enabled `▶`.
 
-Verified: `npm run typecheck` clean, `vite build` succeeds, `npm test` 17/17 pass. Committed as `aefcd48` with the `Henson-Companion: Waldorf the Compiler` trailer.
+Verified: `npm run typecheck` clean, `vite build` succeeds, `npm test` 17/17 pass. Committed as `aefcd48` with the `Mysteron-Companion: Waldorf the Compiler` trailer.
 
 Note: the working tree currently also has unrelated in-progress changes from another agent (a CodeEditor → Prism refactor touching `CodeEditor.tsx` and adding `.md-hl` rules to `styles.css`). I deliberately left those uncommitted and untouched — my commit contains only the four files for this ticket.

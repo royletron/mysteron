@@ -4,14 +4,14 @@ import os from "node:os";
 import path from "node:path";
 import { after, before, test } from "node:test";
 
-const tmp = path.join(os.tmpdir(), `henson-autopilot-${process.pid}`);
-process.env.HENSON_HOME = path.join(tmp, "home");
+const tmp = path.join(os.tmpdir(), `mysteron-autopilot-${process.pid}`);
+process.env.MYSTERON_HOME = path.join(tmp, "home");
 // Empty Claude dir → zero usage → budget always safe for the test.
 process.env.CLAUDE_PROJECTS_DIR = path.join(tmp, "no-claude");
-process.env.HENSON_AGENT_CMD = "true"; // instant, exit 0
-process.env.HENSON_AUTOPILOT_IDLE_MS = "300";
-process.env.HENSON_AUTOPILOT_BUDGET_MS = "300";
-process.env.HENSON_AUTOPILOT_BREATHER_MS = "50";
+process.env.MYSTERON_AGENT_CMD = "true"; // instant, exit 0
+process.env.MYSTERON_AUTOPILOT_IDLE_MS = "300";
+process.env.MYSTERON_AUTOPILOT_BUDGET_MS = "300";
+process.env.MYSTERON_AUTOPILOT_BREATHER_MS = "50";
 
 const { initProject } = await import("../src/core/project.js");
 const { createTicket, listTickets } = await import("../src/core/board.js");

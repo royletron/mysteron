@@ -4,4 +4,4 @@ dist/
 .DS_Store
 
 # Local agent-run history — large, machine-specific logs of each run.
-.henson/runs/
+.mysteron/runs/

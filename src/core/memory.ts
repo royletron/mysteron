@@ -7,7 +7,7 @@ import type { MemorySummary } from "./types.js";
 /**
  * Project memory mirrors the Claude Code memory format: one markdown file per
  * fact, with frontmatter (name, description, metadata.type). Stored under
- * <project>/.henson/memory so it travels with the git repo.
+ * <project>/.mysteron/memory so it travels with the git repo.
  */
 
 function safeName(name: string): string {

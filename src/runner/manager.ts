@@ -59,19 +59,19 @@ interface StartArgs {
 type OutputFormat = "text" | "claude-stream-json";
 
 /**
- * How to launch `henson mcp <root>` so the companion gets this project's board /
+ * How to launch `mysteron mcp <root>` so the companion gets this project's board /
  * docs / memory tools. Prefers the exact CLI the server is running from (no PATH
- * dependency in production); falls back to the linked `henson` binary.
+ * dependency in production); falls back to the linked `mysteron` binary.
  */
-function hensonMcpLauncher(projectRoot: string): { command: string; args: string[] } {
-  if (process.env.HENSON_MCP_BIN) {
-    return { command: process.env.HENSON_MCP_BIN, args: ["mcp", projectRoot] };
+function mysteronMcpLauncher(projectRoot: string): { command: string; args: string[] } {
+  if (process.env.MYSTERON_MCP_BIN) {
+    return { command: process.env.MYSTERON_MCP_BIN, args: ["mcp", projectRoot] };
   }
   const entry = process.argv[1];
   if (entry && entry.endsWith("cli.js")) {
     return { command: process.execPath, args: [entry, "mcp", projectRoot] };
   }
-  return { command: "henson", args: ["mcp", projectRoot] };
+  return { command: "mysteron", args: ["mcp", projectRoot] };
 }
 
 /** Resolve how to launch the agent. Fully overridable so any agent CLI works. Exported for testing. */
@@ -91,10 +91,10 @@ export function resolveCommand(
   // Custom commands default to plain text, but can opt into the Claude
   // stream-json renderer if they emit that format.
   const customFormat: OutputFormat =
-    process.env.HENSON_AGENT_FORMAT === "claude-stream-json" ? "claude-stream-json" : "text";
+    process.env.MYSTERON_AGENT_FORMAT === "claude-stream-json" ? "claude-stream-json" : "text";
 
   // 1) Explicit shell command (env) — prompt arrives on stdin + env.
-  const envCmd = process.env.HENSON_AGENT_CMD;
+  const envCmd = process.env.MYSTERON_AGENT_CMD;
   if (envCmd) return { cmd: envCmd, args: [], shell: true, display: envCmd, format: customFormat };
 
   // 2) Per-project configured command.
@@ -115,26 +115,26 @@ export function resolveCommand(
   const mode = config.yolo ? "bypassPermissions" : "acceptEdits";
   const args = ["-p", prompt, "--output-format", "stream-json", "--verbose", "--permission-mode", mode];
 
-  // Give the companion this project's Henson MCP (board/docs/memory) so it can
+  // Give the companion this project's Mysteron MCP (board/docs/memory) so it can
   // read the spec, save memory, and move its ticket to "review". --strict-mcp-config
   // keeps the run deterministic (only this server, not the user's global ones).
-  const attachMcp = process.env.HENSON_AGENT_MCP !== "0";
+  const attachMcp = process.env.MYSTERON_AGENT_MCP !== "0";
   const allowed = (config.allowedTools ?? []).filter((t) => t.trim());
   const disallowed = (config.disallowedTools ?? []).filter((t) => t.trim());
   if (attachMcp) {
-    const launcher = hensonMcpLauncher(projectRoot);
-    const mcpConfig = JSON.stringify({ mcpServers: { henson: launcher } });
+    const launcher = mysteronMcpLauncher(projectRoot);
+    const mcpConfig = JSON.stringify({ mcpServers: { mysteron: launcher } });
     args.push("--mcp-config", mcpConfig, "--strict-mcp-config");
-    // Auto-allow Henson's own tools so the companion can use them without yolo.
-    if (!allowed.includes("mcp__henson")) allowed.push("mcp__henson");
+    // Auto-allow Mysteron's own tools so the companion can use them without yolo.
+    if (!allowed.includes("mcp__mysteron")) allowed.push("mcp__mysteron");
   }
 
   // Pin the companion to a stable session so it keeps one conversation across
   // tickets (continuity). `--session-id` *creates* the session (first run);
   // later runs must `--resume` it, or Claude errors "session already in use".
   // The per-companion lock guarantees no concurrent use of the same session.
-  // HENSON_AGENT_SESSION=0 opts out (fresh context each run).
-  const useSession = companion && process.env.HENSON_AGENT_SESSION !== "0";
+  // MYSTERON_AGENT_SESSION=0 opts out (fresh context each run).
+  const useSession = companion && process.env.MYSTERON_AGENT_SESSION !== "0";
   const sessionFlag = resumeSession ? "--resume" : "--session-id";
   if (useSession) args.push(sessionFlag, companion.id);
 
@@ -149,7 +149,7 @@ export function resolveCommand(
     display:
       `claude -p <ticket> --output-format stream-json --permission-mode ${mode}` +
       (useSession ? ` ${sessionFlag} ${companion.id}` : "") +
-      (attachMcp ? " --mcp-config <henson> --strict-mcp-config" : "") +
+      (attachMcp ? " --mcp-config <mysteron> --strict-mcp-config" : "") +
       (allowed.length ? ` --allowedTools ${allowed.join(" ")}` : "") +
       (disallowed.length ? ` --disallowedTools ${disallowed.join(" ")}` : ""),
     format: "claude-stream-json",
@@ -253,12 +253,12 @@ export function buildPrompt(
         ``,
         `# Attached images`,
         `The reporter attached ${ticket.attachments.length} image(s) to this ticket. View each with the Read tool before starting — they show the problem or the desired result:`,
-        ...ticket.attachments.map((name) => `- .henson/board/attachments/${ticket.id}/${name}`),
+        ...ticket.attachments.map((name) => `- .mysteron/board/attachments/${ticket.id}/${name}`),
       ]
     : [];
   return [
     `You are ${comp?.name ?? "the companion"} (role: ${comp?.role ?? "soloist"}), working on the project "${config.name}".`,
-    `Work on the following ticket end-to-end, following the project etiquette. If a Henson MCP server is configured, use it to read docs/memory and to move this ticket to "review" when the work is complete and tests pass.`,
+    `Work on the following ticket end-to-end, following the project etiquette. If a Mysteron MCP server is configured, use it to read docs/memory and to move this ticket to "review" when the work is complete and tests pass.`,
     ...brief,
     ``,
     `# Ticket ${ticket.id}: ${ticket.title}`,
@@ -267,7 +267,7 @@ export function buildPrompt(
     ``,
     `# Git`,
     gitInstruction(recipe.git),
-    comp ? `When you commit, add a trailer line \`Henson-Companion: ${comp.name}\` so the work is attributed to you in Henson.` : "",
+    comp ? `When you commit, add a trailer line \`Mysteron-Companion: ${comp.name}\` so the work is attributed to you in Mysteron.` : "",
     ...team,
     ``,
     `# Project etiquette`,
@@ -460,19 +460,19 @@ export class RunManager {
       shell,
       env: {
         ...process.env,
-        HENSON_PROJECT: args.config.name,
-        HENSON_PROJECT_PATH: args.projectRoot,
-        HENSON_TICKET_ID: args.ticket.id,
-        HENSON_TICKET_TITLE: args.ticket.title,
-        HENSON_TICKET_PROMPT: prompt,
-        HENSON_YOLO: args.config.yolo ? "1" : "0",
-        // Route the agent's Anthropic traffic through Henson's capture proxy so
+        MYSTERON_PROJECT: args.config.name,
+        MYSTERON_PROJECT_PATH: args.projectRoot,
+        MYSTERON_TICKET_ID: args.ticket.id,
+        MYSTERON_TICKET_TITLE: args.ticket.title,
+        MYSTERON_TICKET_PROMPT: prompt,
+        MYSTERON_YOLO: args.config.yolo ? "1" : "0",
+        // Route the agent's Anthropic traffic through Mysteron's capture proxy so
         // we can read real usage limits off the response headers. The proxy
         // forwards to the original upstream (which it captured at startup), so
         // overriding the child's base URL here doesn't create a loop. Harmless
         // for non-Anthropic custom agents (they ignore it).
-        ...(process.env.HENSON_RATELIMIT_PROXY_URL
-          ? { ANTHROPIC_BASE_URL: process.env.HENSON_RATELIMIT_PROXY_URL }
+        ...(process.env.MYSTERON_RATELIMIT_PROXY_URL
+          ? { ANTHROPIC_BASE_URL: process.env.MYSTERON_RATELIMIT_PROXY_URL }
           : {}),
       },
       stdio: ["pipe", "pipe", "pipe"],
@@ -491,7 +491,7 @@ export class RunManager {
     child.on("error", (err) => {
       this.append(run, "system", `✖ failed to launch: ${err.message}`);
       if (cmd === "claude") {
-        this.append(run, "system", "Is Claude Code installed and on PATH? Override with HENSON_AGENT_CMD or config.agent.command.");
+        this.append(run, "system", "Is Claude Code installed and on PATH? Override with MYSTERON_AGENT_CMD or config.agent.command.");
       }
       this.finish(run, "failed", null);
     });

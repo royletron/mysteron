@@ -214,7 +214,7 @@ export function MemoryTab({ detail }: { detail: ProjectDetail }) {
     <div class="card">
       <h2 class="text-lg font-semibold">Project memory</h2>
       <p class="text-sm text-zinc-400">
-        Facts the companion has saved (one markdown file per fact, stored under .henson/memory).
+        Facts the companion has saved (one markdown file per fact, stored under .mysteron/memory).
       </p>
       {detail.memories.length === 0 && <div class="mt-2 text-sm text-zinc-500">No memories saved yet.</div>}
       {detail.memories.map((m) => (
@@ -338,7 +338,7 @@ export function PluginsTab({ detail }: { detail: ProjectDetail }) {
 
   const limitSourceLabel: Record<string, string> = {
     config: "project config",
-    env: "HENSON_USAGE_TOKEN_LIMIT env var",
+    env: "MYSTERON_USAGE_TOKEN_LIMIT env var",
     default: "default (uncalibrated)",
   };
 
@@ -408,7 +408,7 @@ export function PluginsTab({ detail }: { detail: ProjectDetail }) {
                 </p>
                 {u.account?.kind === "subscription" && (
                   <p class="mt-1 text-xs text-amber-400">
-                    Waiting for the first live reading — run a ticket so Henson can capture your real limits.
+                    Waiting for the first live reading — run a ticket so Mysteron can capture your real limits.
                   </p>
                 )}
                 <div class="mt-2 h-2.5 overflow-hidden rounded-full border border-zinc-800 bg-zinc-800">
@@ -510,9 +510,9 @@ function gitLabel(git: Recipe["git"]): string {
 export function CompanionTab({ detail }: { detail: ProjectDetail }) {
   const c = detail.config;
   const path = detail.entry.path;
-  const cmd = `henson mcp ${path}`;
+  const cmd = `mysteron mcp ${path}`;
   const mcpJson = JSON.stringify(
-    { mcpServers: { [`henson-${detail.entry.name}`]: { command: "henson", args: ["mcp", path] } } },
+    { mcpServers: { [`mysteron-${detail.entry.name}`]: { command: "mysteron", args: ["mcp", path] } } },
     null,
     2,
   );
@@ -624,7 +624,7 @@ export function CommitsTab({ detail }: { detail: ProjectDetail }) {
     <div class="card">
       <h2 class="text-lg font-semibold">Commits</h2>
       <p class="text-sm text-zinc-400">
-        Recent git history. Commits a companion made carry a <code>Henson-Companion</code> trailer and show their avatar.
+        Recent git history. Commits a companion made carry a <code>Mysteron-Companion</code> trailer and show their avatar.
       </p>
       {loading && !data ? (
         <div class="pulse mt-2 text-sm text-zinc-500">Loading…</div>

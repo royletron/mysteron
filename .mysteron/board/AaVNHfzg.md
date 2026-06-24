@@ -17,7 +17,7 @@ Our agent log is a wall of text at the moment. It would be good if we could have
 
 Done. The flat wall of coloured lines is replaced by a structured `AgentLog`.
 
-**Tool use — icons + disclosures.** Each tool call is now a row with a per-tool icon (Bash ⌘, Read 📄, Edit ✏️, Grep 🔎, Task 🤖, WebFetch 🌐, Henson MCP 📋, generic MCP 🔌, …), the tool + its argument on one line. If the call produced a result, the row becomes a **disclosure** — click to expand and see the detail; collapsed by default so the log stays scannable.
+**Tool use — icons + disclosures.** Each tool call is now a row with a per-tool icon (Bash ⌘, Read 📄, Edit ✏️, Grep 🔎, Task 🤖, WebFetch 🌐, Mysteron MCP 📋, generic MCP 🔌, …), the tool + its argument on one line. If the call produced a result, the row becomes a **disclosure** — click to expand and see the detail; collapsed by default so the log stays scannable.
 
 **Syntax highlighting.** Added a shared Prism module (`highlight.ts`) with a focused language set (ts/tsx/js/jsx, bash, json, python, yaml, diff, markdown) and a palette-aligned token theme:
 - Expanded tool detail is highlighted by inferred language — file contents by extension (Read/Edit/Write), JSON-looking output as JSON.
@@ -28,4 +28,4 @@ Done. The flat wall of coloured lines is replaced by a structured `AgentLog`.
 
 New files: `web/src/highlight.ts`, `web/src/Code.tsx`, `web/src/AgentLog.tsx`. Removed the old `LogLine`.
 
-Verified: `npm run typecheck` clean, `vite build` succeeds, `npm test` 17/17 pass. Committed as `15eb880` with the `Henson-Companion: Waldorf the Compiler` trailer.
+Verified: `npm run typecheck` clean, `vite build` succeeds, `npm test` 17/17 pass. Committed as `15eb880` with the `Mysteron-Companion: Waldorf the Compiler` trailer.

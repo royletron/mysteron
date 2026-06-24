@@ -25,4 +25,4 @@ The timer shows the active run while running, or the selected run's final durati
 
 File: `web/src/TicketPage.tsx`.
 
-Verified: `npm run typecheck` clean, `vite build` succeeds, `npm test` 17/17 pass. Committed as `52b9f9a` with the `Henson-Companion: Waldorf the Compiler` trailer.
+Verified: `npm run typecheck` clean, `vite build` succeeds, `npm test` 17/17 pass. Committed as `52b9f9a` with the `Mysteron-Companion: Waldorf the Compiler` trailer.

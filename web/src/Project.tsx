@@ -67,7 +67,7 @@ export function Project({ projectId, tab: urlTab, evt }: { projectId: string; ta
   };
 
   const unregister = async () => {
-    if (!confirm(`Unregister "${data.entry.name}"? This only removes it from Henson's registry — files stay on disk.`))
+    if (!confirm(`Unregister "${data.entry.name}"? This only removes it from Mysteron's registry — files stay on disk.`))
       return;
     await api(`/api/projects/${projectId}`, { method: "DELETE" });
     location.hash = "#/";

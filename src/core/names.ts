@@ -1,6 +1,6 @@
 /**
  * Generates a fun, deterministic-ish companion name + avatar.
- * A nod to the Muppets, since Henson is named for Jim Henson.
+ * A nod to the Muppets — a little puppeteer whimsy for companion names.
  */
 
 const FIRST = [

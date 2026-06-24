@@ -35,8 +35,8 @@ export function App() {
     <div class="flex min-h-[100dvh] flex-col">
       <header class="sticky top-0 z-10 flex items-center gap-2 border-b border-zinc-800 bg-zinc-950/80 px-6 py-3 backdrop-blur">
         <a href="#/" class="flex items-center gap-2">
-          <Avatar seed="Henson" variant="marble" size={26} />
-          <span class="text-xl font-bold tracking-wide">Henson</span>
+          <Avatar seed="Mysteron" variant="marble" size={26} />
+          <span class="text-xl font-bold tracking-wide">Mysteron</span>
         </a>
         {route.name === "home" ? (
           <span class="text-sm italic text-zinc-500">puppeteering your agents</span>
@@ -111,13 +111,13 @@ export function App() {
   );
 }
 
-const REPO = "https://github.com/royletron/henson";
+const REPO = "https://github.com/royletron/mysteron";
 
 function Footer() {
   const link = "text-zinc-400 hover:text-violet-300";
   return (
     <footer class="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-zinc-800 px-6 py-4 text-sm text-zinc-500">
-      <span class="font-semibold text-zinc-300">Henson</span>
+      <span class="font-semibold text-zinc-300">Mysteron</span>
       <a class={link} href={REPO} target="_blank" rel="noopener noreferrer">
         GitHub
       </a>

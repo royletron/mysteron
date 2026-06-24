@@ -4,9 +4,9 @@ import os from "node:os";
 import path from "node:path";
 import { after, before, test } from "node:test";
 
-// Point Henson at throwaway dirs before importing modules that read env at call time.
-const tmp = path.join(os.tmpdir(), `henson-test-${process.pid}`);
-process.env.HENSON_HOME = path.join(tmp, "home");
+// Point Mysteron at throwaway dirs before importing modules that read env at call time.
+const tmp = path.join(os.tmpdir(), `mysteron-test-${process.pid}`);
+process.env.MYSTERON_HOME = path.join(tmp, "home");
 process.env.CLAUDE_PROJECTS_DIR = path.join(tmp, "claude");
 
 const { initProject, loadProjectConfig } = await import("../src/core/project.js");
@@ -71,10 +71,10 @@ test("init imports existing project docs (README, SPEC, docs/*)", async () => {
   assert.ok(!importedDocs.some((d) => d.from.includes("node_modules")));
 });
 
-test("init adopts an existing committed .henson (cloned-from-elsewhere)", async () => {
-  // Simulate a repo cloned from another machine: .henson/ is already present.
+test("init adopts an existing committed .mysteron (cloned-from-elsewhere)", async () => {
+  // Simulate a repo cloned from another machine: .mysteron/ is already present.
   const root = path.join(tmp, "cloned");
-  await fs.mkdir(path.join(root, ".henson", "memory"), { recursive: true });
+  await fs.mkdir(path.join(root, ".mysteron", "memory"), { recursive: true });
   const sharedConfig = {
     id: "shared01",
     name: "Cloned App",
@@ -83,8 +83,8 @@ test("init adopts an existing committed .henson (cloned-from-elsewhere)", async 
     yolo: true,
     createdAt: "2025-01-01T00:00:00.000Z",
   };
-  await fs.writeFile(path.join(root, ".henson", "config.json"), JSON.stringify(sharedConfig));
-  await fs.writeFile(path.join(root, ".henson", "memory", "team-convention.md"), "shared fact");
+  await fs.writeFile(path.join(root, ".mysteron", "config.json"), JSON.stringify(sharedConfig));
+  await fs.writeFile(path.join(root, ".mysteron", "memory", "team-convention.md"), "shared fact");
 
   const res = await initProject(root, { name: "Ignored Name" });
   assert.equal(res.adopted, true);

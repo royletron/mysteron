@@ -4,10 +4,10 @@ import os from "node:os";
 import path from "node:path";
 import { after, before, test } from "node:test";
 
-const tmp = path.join(os.tmpdir(), `henson-runner-${process.pid}`);
-process.env.HENSON_HOME = path.join(tmp, "home");
+const tmp = path.join(os.tmpdir(), `mysteron-runner-${process.pid}`);
+process.env.MYSTERON_HOME = path.join(tmp, "home");
 // Fake agent: echoes the ticket it was handed (via env) and exits cleanly.
-process.env.HENSON_AGENT_CMD = 'echo "handling: $HENSON_TICKET_TITLE"; echo "oops" 1>&2';
+process.env.MYSTERON_AGENT_CMD = 'echo "handling: $MYSTERON_TICKET_TITLE"; echo "oops" 1>&2';
 
 const { initProject } = await import("../src/core/project.js");
 const { createTicket, getTicket } = await import("../src/core/board.js");
@@ -109,8 +109,8 @@ test("renderStreamEvent turns Claude stream-json into readable lines", () => {
 });
 
 test("resolveCommand maps yolo + allowed/disallowed tools to claude flags", () => {
-  const saved = process.env.HENSON_AGENT_CMD;
-  delete process.env.HENSON_AGENT_CMD; // force the default claude path
+  const saved = process.env.MYSTERON_AGENT_CMD;
+  delete process.env.MYSTERON_AGENT_CMD; // force the default claude path
   try {
     const base = { id: "x", name: "P", companion: { name: "n", avatar: "x" }, plugins: [], createdAt: "" };
     const off = resolveCommand(
@@ -122,11 +122,11 @@ test("resolveCommand maps yolo + allowed/disallowed tools to claude flags", () =
     assert.ok(off.args.includes("acceptEdits"));
     assert.ok(off.args.join(" ").includes("--allowedTools Edit Bash(npm test:*)"));
     assert.ok(off.args.includes("--disallowedTools") && off.args.includes("Bash(rm *)"));
-    // The Henson MCP is attached and its tools auto-allowed.
+    // The Mysteron MCP is attached and its tools auto-allowed.
     assert.ok(off.args.includes("--mcp-config") && off.args.includes("--strict-mcp-config"));
-    assert.ok(off.args.includes("mcp__henson"));
+    assert.ok(off.args.includes("mcp__mysteron"));
     const mcpJson = off.args[off.args.indexOf("--mcp-config") + 1];
-    assert.match(mcpJson, /"mcpServers".*"henson".*"\/tmp\/proj"/);
+    assert.match(mcpJson, /"mcpServers".*"mysteron".*"\/tmp\/proj"/);
 
     const on = resolveCommand({ ...base, yolo: true } as any, "/tmp/proj", "PROMPT");
     assert.ok(on.args.includes("bypassPermissions"));
@@ -141,7 +141,7 @@ test("resolveCommand maps yolo + allowed/disallowed tools to claude flags", () =
     assert.ok(next.args.includes("--resume") && next.args.includes(comp.id));
     assert.ok(!next.args.includes("--session-id"));
   } finally {
-    if (saved !== undefined) process.env.HENSON_AGENT_CMD = saved;
+    if (saved !== undefined) process.env.MYSTERON_AGENT_CMD = saved;
   }
 });
 
@@ -170,7 +170,7 @@ test("buildPrompt embeds the recipe's git behaviour and team", () => {
   const withImg = { ...promptTicket, attachments: ["bug.png"] };
   const imgPrompt = buildPrompt(promptConfig(), withImg, "", "");
   assert.match(imgPrompt, /# Attached images/);
-  assert.match(imgPrompt, /\.henson\/board\/attachments\/T1\/bug\.png/);
+  assert.match(imgPrompt, /\.mysteron\/board\/attachments\/T1\/bug\.png/);
   assert.ok(!buildPrompt(promptConfig(), promptTicket, "", "").includes("# Attached images"));
 });
 
@@ -186,7 +186,7 @@ test("runResultStats reads cost + turns from a result event", () => {
 });
 
 test("a second run for the same active ticket returns the existing run", async () => {
-  process.env.HENSON_AGENT_CMD = "sleep 1";
+  process.env.MYSTERON_AGENT_CMD = "sleep 1";
   const { config } = await initProject(projectRoot);
   const ticket = await createTicket(projectRoot, { title: "Long task", state: "ready" });
   const rm = new RunManager();
@@ -199,7 +199,7 @@ test("a second run for the same active ticket returns the existing run", async (
 });
 
 test("a companion runs one ticket at a time (busy lock)", async () => {
-  process.env.HENSON_AGENT_CMD = "sleep 1";
+  process.env.MYSTERON_AGENT_CMD = "sleep 1";
   const proj = path.join(tmp, "lock");
   const { config } = await initProject(proj, { name: "Lock" }); // solo → one soloist
   const a = await createTicket(proj, { title: "A", state: "ready" });
@@ -221,7 +221,7 @@ test("a companion runs one ticket at a time (busy lock)", async () => {
 });
 
 test("a finished run is persisted to disk and survives a restart", async () => {
-  process.env.HENSON_AGENT_CMD = 'echo "did the work"';
+  process.env.MYSTERON_AGENT_CMD = 'echo "did the work"';
   const proj = path.join(tmp, "persist");
   const { config } = await initProject(proj, { name: "Persist" });
   const ticket = await createTicket(proj, { title: "Keep history", state: "ready" });

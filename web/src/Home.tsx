@@ -30,7 +30,7 @@ export function Home({ evt }: { evt: AppEvent }) {
       {data && data.projects.length === 0 && (
         <div class="p-10 text-center text-zinc-500">
           <p>No projects yet.</p>
-          <p>Initialise Henson in a project to get a companion, a board, and shared docs.</p>
+          <p>Initialise Mysteron in a project to get a companion, a board, and shared docs.</p>
         </div>
       )}
 
@@ -144,9 +144,9 @@ function NewProjectModal({ onClose, onCreated }: { onClose: () => void; onCreate
 
   return (
     <Modal onClose={onClose}>
-      <h2 class="mb-1 text-lg font-semibold">New Henson project</h2>
+      <h2 class="mb-1 text-lg font-semibold">New Mysteron project</h2>
       <p class="text-sm text-zinc-400">
-        Initialise Henson inside an existing folder. Creates a .henson/ board and a randomly-named companion,
+        Initialise Mysteron inside an existing folder. Creates a .mysteron/ board and a randomly-named companion,
         and imports any docs the project already has (README, SPEC, anything under docs/).
       </p>
       <div class="flex items-end gap-2">

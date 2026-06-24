@@ -1,11 +1,11 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { nanoid } from "nanoid";
-import { hensonHome, registryPath } from "./paths.js";
+import { mysteronHome, registryPath } from "./paths.js";
 import type { Registry, RegistryEntry } from "./types.js";
 
 async function ensureHome(): Promise<void> {
-  await fs.mkdir(hensonHome(), { recursive: true });
+  await fs.mkdir(mysteronHome(), { recursive: true });
 }
 
 export async function loadRegistry(): Promise<Registry> {

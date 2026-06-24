@@ -32,4 +32,4 @@ Files: `src/runner/manager.ts`, `web/src/{TicketPage,TicketPanel,api}.ts`.
 
 Tests: extracted the capture into a pure `runResultStats()` and unit-tested it (result event → cost+turns; non-result → empty; missing numbers → undefined, not 0/NaN). `npm test` **19/19** pass, `npm run typecheck` clean, `vite build` succeeds.
 
-Committed as `22a098c` with the `Henson-Companion: Waldorf the Compiler` trailer.
+Committed as `22a098c` with the `Mysteron-Companion: Waldorf the Compiler` trailer.

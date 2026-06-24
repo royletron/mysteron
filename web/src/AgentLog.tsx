@@ -30,7 +30,7 @@ const TOOL_ICONS: Record<string, string> = {
 
 function toolIcon(name: string): string {
   if (TOOL_ICONS[name]) return TOOL_ICONS[name];
-  if (name.startsWith("mcp__henson__")) return "📋";
+  if (name.startsWith("mcp__mysteron__")) return "📋";
   if (name.startsWith("mcp__")) return "🔌";
   return "🔧";
 }

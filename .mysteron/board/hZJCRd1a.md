@@ -25,6 +25,6 @@ Both done. 🧭
 
 File: `web/src/TicketPage.tsx`.
 
-Verified: `npm run typecheck` clean, `npm test` 19/19 pass, `vite build` succeeds. Committed as `793741a` with the `Henson-Companion: Waldorf the Compiler` trailer.
+Verified: `npm run typecheck` clean, `npm test` 19/19 pass, `vite build` succeeds. Committed as `793741a` with the `Mysteron-Companion: Waldorf the Compiler` trailer.
 
 (Adopted the new commit convention — fun + emoji + Conventional Commits — for this one.)

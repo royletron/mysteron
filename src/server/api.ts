@@ -96,7 +96,7 @@ export function registerApi(
     app.use((req: Request, res: Response, next: () => void) => {
       const t = Date.now();
       res.on("finish", () =>
-        console.log(`[henson] ${req.method} ${req.originalUrl} → ${res.statusCode} (${Date.now() - t}ms)`),
+        console.log(`[mysteron] ${req.method} ${req.originalUrl} → ${res.statusCode} (${Date.now() - t}ms)`),
       );
       next();
     });
@@ -188,7 +188,7 @@ export function registerApi(
     res.json({ ok: true });
   });
 
-  // Recent git commits, with companions attributed via the Henson-Companion trailer.
+  // Recent git commits, with companions attributed via the Mysteron-Companion trailer.
   app.get("/api/projects/:id/commits", async (req: Request, res: Response) => {
     const r = await resolve(req.params.id);
     if (!r) return notFound(res);
@@ -499,12 +499,12 @@ export function registerApi(
     });
     sseWrite(res, ": connected\n\n");
     const onEvent = (evt: unknown) => sseWrite(res, `data: ${JSON.stringify(evt)}\n\n`);
-    bus.on("henson", onEvent);
+    bus.on("mysteron", onEvent);
     bus.on("autopilot", onEvent);
     const keepAlive = setInterval(() => sseWrite(res, ": ping\n\n"), 25_000);
     res.on("close", () => {
       clearInterval(keepAlive);
-      bus.off("henson", onEvent);
+      bus.off("mysteron", onEvent);
       bus.off("autopilot", onEvent);
     });
   });
@@ -512,7 +512,7 @@ export function registerApi(
   // Error handler — turns any route failure into a 500 (and logs it) instead of
   // a hung request. Must be registered last.
   app.use((err: Error, _req: Request, res: Response, _next: (e?: unknown) => void) => {
-    console.error("[henson] route error:", verbose ? err.stack : err.message);
+    console.error("[mysteron] route error:", verbose ? err.stack : err.message);
     if (!res.headersSent) res.status(500).json({ error: err.message });
   });
 }

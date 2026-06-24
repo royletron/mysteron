@@ -36,7 +36,7 @@ export async function buildMcpServer(
   config: ProjectConfig,
 ): Promise<McpServer> {
   const server = new McpServer({
-    name: `henson:${config.name}`,
+    name: `mysteron:${config.name}`,
     version: "0.1.0",
   });
 
@@ -252,7 +252,7 @@ export async function startStdioMcp(projectRoot: string): Promise<void> {
   const config = await loadProjectConfig(projectRoot);
   if (!config) {
     throw new Error(
-      `No Henson project at ${projectRoot}. Run "henson init" there first.`,
+      `No Mysteron project at ${projectRoot}. Run "mysteron init" there first.`,
     );
   }
   const server = await buildMcpServer(projectRoot, config);

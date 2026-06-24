@@ -17,10 +17,10 @@ The top navbar isn't doing a massive amount. Can we maybe have a project selecto
 
 Both done — the navbar now earns its keep.
 
-**Breadcrumb.** Next to the Henson logo (which links home) there's now a trail that reflects where you are:
+**Breadcrumb.** Next to the Mysteron logo (which links home) there's now a trail that reflects where you are:
 - Home → just the tagline.
-- Project → `Henson / {project name}`.
-- Ticket → `Henson / {project name} / {ticket title}`, where the project segment links back to the board.
+- Project → `Mysteron / {project name}`.
+- Ticket → `Mysteron / {project name} / {ticket title}`, where the project segment links back to the board.
 
 The ticket title is reported up from `TicketPage` via an `onTitle` callback (cleared on navigation away), so the leaf shows the real title rather than the raw id — no extra fetch.
 
@@ -30,6 +30,6 @@ The tagline ("puppeteering your agents") now only appears on the home screen, fr
 
 Files: `web/src/App.tsx`, `web/src/TicketPage.tsx`.
 
-Verified: `npm run typecheck` clean, `vite build` succeeds, `npm test` 17/17 pass. Committed as `c4aa93e` with the `Henson-Companion: Waldorf the Compiler` trailer.
+Verified: `npm run typecheck` clean, `vite build` succeeds, `npm test` 17/17 pass. Committed as `c4aa93e` with the `Mysteron-Companion: Waldorf the Compiler` trailer.
 
 Minor note: the navbar fetches `/api/projects` for the selector (keyed on the live-event seq, same pattern Home uses), so on the home screen that list is fetched by both — a small, harmless duplication I left rather than refactor Home's data flow.

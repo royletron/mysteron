@@ -34,4 +34,4 @@ Wired them into **every** running/live state:
 
 The amber "● unsaved" doc-dirty dots were left alone — that's an edit state, not a running state.
 
-Verified: `npm run typecheck` clean, `vite build` succeeds, `npm test` 17/17 pass. Committed as `57a6c23` with the `Henson-Companion: Waldorf the Compiler` trailer.
+Verified: `npm run typecheck` clean, `vite build` succeeds, `npm test` 17/17 pass. Committed as `57a6c23` with the `Mysteron-Companion: Waldorf the Compiler` trailer.

@@ -1,49 +1,49 @@
 import os from "node:os";
 import path from "node:path";
 
-/** Root of the central Henson config (registry, global plugin state). */
-export function hensonHome(): string {
-  return process.env.HENSON_HOME ?? path.join(os.homedir(), ".henson");
+/** Root of the central Mysteron config (registry, global plugin state). */
+export function mysteronHome(): string {
+  return process.env.MYSTERON_HOME ?? path.join(os.homedir(), ".mysteron");
 }
 
 export function registryPath(): string {
-  return path.join(hensonHome(), "registry.json");
+  return path.join(mysteronHome(), "registry.json");
 }
 
-/** The per-project Henson directory, e.g. <project>/.henson */
-export function projectHensonDir(projectRoot: string): string {
-  return path.join(projectRoot, ".henson");
+/** The per-project Mysteron directory, e.g. <project>/.mysteron */
+export function projectMysteronDir(projectRoot: string): string {
+  return path.join(projectRoot, ".mysteron");
 }
 
 export function projectConfigPath(projectRoot: string): string {
-  return path.join(projectHensonDir(projectRoot), "config.json");
+  return path.join(projectMysteronDir(projectRoot), "config.json");
 }
 
 export function boardDir(projectRoot: string): string {
-  return path.join(projectHensonDir(projectRoot), "board");
+  return path.join(projectMysteronDir(projectRoot), "board");
 }
 
 export function docsDir(projectRoot: string): string {
-  return path.join(projectHensonDir(projectRoot), "docs");
+  return path.join(projectMysteronDir(projectRoot), "docs");
 }
 
-/** Where a ticket's image attachments live, e.g. <project>/.henson/board/attachments/<id> */
+/** Where a ticket's image attachments live, e.g. <project>/.mysteron/board/attachments/<id> */
 export function attachmentsDir(projectRoot: string, ticketId: string): string {
-  return path.join(projectHensonDir(projectRoot), "board", "attachments", ticketId);
+  return path.join(projectMysteronDir(projectRoot), "board", "attachments", ticketId);
 }
 
 export function memoryDir(projectRoot: string): string {
-  return path.join(projectHensonDir(projectRoot), "memory");
+  return path.join(projectMysteronDir(projectRoot), "memory");
 }
 
-/** Where agent-run history is persisted, e.g. <project>/.henson/runs */
+/** Where agent-run history is persisted, e.g. <project>/.mysteron/runs */
 export function runsDir(projectRoot: string): string {
-  return path.join(projectHensonDir(projectRoot), "runs");
+  return path.join(projectMysteronDir(projectRoot), "runs");
 }
 
-/** Companion role-spec docs, e.g. <project>/.henson/companions/<id>.md */
+/** Companion role-spec docs, e.g. <project>/.mysteron/companions/<id>.md */
 export function companionsDir(projectRoot: string): string {
-  return path.join(projectHensonDir(projectRoot), "companions");
+  return path.join(projectMysteronDir(projectRoot), "companions");
 }
 
 export const ETIQUETTE_DOC = "ETIQUETTE.md";

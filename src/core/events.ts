@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 
-export interface HensonEvent {
+export interface MysteronEvent {
   type: "docs-changed" | "board-changed" | "config-changed";
   projectId: string;
   detail?: string;
@@ -37,9 +37,9 @@ export interface AutopilotEvent {
 }
 
 /** Process-wide event bus used to push live updates to the web UI (via SSE). */
-class HensonBus extends EventEmitter {
-  emitEvent(evt: Omit<HensonEvent, "at">): void {
-    this.emit("henson", { ...evt, at: new Date().toISOString() } satisfies HensonEvent);
+class MysteronBus extends EventEmitter {
+  emitEvent(evt: Omit<MysteronEvent, "at">): void {
+    this.emit("mysteron", { ...evt, at: new Date().toISOString() } satisfies MysteronEvent);
   }
 
   emitRun(evt: Omit<RunEvent, "at">): void {
@@ -51,4 +51,4 @@ class HensonBus extends EventEmitter {
   }
 }
 
-export const bus = new HensonBus();
+export const bus = new MysteronBus();

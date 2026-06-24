@@ -1,7 +1,7 @@
 import type { Plugin } from "./types.js";
 import { usageMonitorPlugin } from "./usage-monitor/index.js";
 
-/** All plugins known to Henson, keyed by id. */
+/** All plugins known to Mysteron, keyed by id. */
 const REGISTRY: Record<string, Plugin> = {
   [usageMonitorPlugin.id]: usageMonitorPlugin,
 };

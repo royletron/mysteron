@@ -30,4 +30,4 @@ Wired in everywhere a run appears:
 
 This replaces the old static `runDuration` (which was blank for in-flight runs); `RunTimer` covers both live and finished cases, so `runDuration` was removed.
 
-Verified: `npm run typecheck` clean, `vite build` succeeds, `npm test` 17/17 pass. Committed as `62d070e` with the `Henson-Companion: Waldorf the Compiler` trailer.
+Verified: `npm run typecheck` clean, `vite build` succeeds, `npm test` 17/17 pass. Committed as `62d070e` with the `Mysteron-Companion: Waldorf the Compiler` trailer.

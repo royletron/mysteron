@@ -84,7 +84,7 @@ export function findRecipe(id: string): Recipe | undefined {
 /** Prompt-ready instructions describing a recipe's git branching strategy. */
 export function gitInstruction(git: RecipeGit): string {
   if (git.strategy === "new-branch") {
-    const prefix = git.branchPrefix ?? "henson/";
+    const prefix = git.branchPrefix ?? "mysteron/";
     return `Create a dedicated git branch for this ticket (e.g. \`${prefix}<ticket-id>\`) and commit your work there, keeping it isolated from the shared branch.`;
   }
   return "Work in the branch that is currently checked out — do NOT create or switch branches. Land your work as small, focused, discrete commits on the current branch (this space is shared with the user and other agents).";

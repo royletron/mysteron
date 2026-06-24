@@ -1,6 +1,6 @@
 import type { Server } from "node:http";
 import { WebSocketServer, type WebSocket } from "ws";
-import { bus, type AutopilotEvent, type HensonEvent, type RunEvent } from "../core/events.js";
+import { bus, type AutopilotEvent, type MysteronEvent, type RunEvent } from "../core/events.js";
 import type { RunManager } from "../runner/manager.js";
 
 /**
@@ -15,21 +15,21 @@ import type { RunManager } from "../runner/manager.js";
  * (every socket receives global events by default)
  *
  * Server → client messages:
- *   { channel: "global", evt }     a HensonEvent or AutopilotEvent
+ *   { channel: "global", evt }     a MysteronEvent or AutopilotEvent
  *   { channel: "run", evt }        a RunEvent (kind: line | status | started)
  */
 export function setupWebSocket(server: Server, runs: RunManager, verbose = false): void {
   const wss = new WebSocketServer({ server, path: "/ws" });
 
   // Fan global events out to every connected socket.
-  const onHenson = (evt: HensonEvent) => broadcast({ channel: "global", evt });
+  const onMysteron = (evt: MysteronEvent) => broadcast({ channel: "global", evt });
   const onAutopilot = (evt: AutopilotEvent) => broadcast({ channel: "global", evt });
   const onRun = (evt: RunEvent) => {
     for (const c of clients) {
       if (c.runs.has(evt.runId)) send(c.socket, { channel: "run", evt });
     }
   };
-  bus.on("henson", onHenson);
+  bus.on("mysteron", onMysteron);
   bus.on("autopilot", onAutopilot);
   bus.on("run", onRun);
 
@@ -55,7 +55,7 @@ export function setupWebSocket(server: Server, runs: RunManager, verbose = false
   wss.on("connection", (socket) => {
     const client: Client = { socket, runs: new Set() };
     clients.add(client);
-    if (verbose) console.log(`[henson] ws connect (${clients.size} open)`);
+    if (verbose) console.log(`[mysteron] ws connect (${clients.size} open)`);
 
     socket.on("message", (raw) => {
       let msg: { type?: string; runId?: string };
@@ -97,7 +97,7 @@ export function setupWebSocket(server: Server, runs: RunManager, verbose = false
 
     socket.on("close", () => {
       clients.delete(client);
-      if (verbose) console.log(`[henson] ws close (${clients.size} open)`);
+      if (verbose) console.log(`[mysteron] ws close (${clients.size} open)`);
     });
     socket.on("error", () => clients.delete(client));
 

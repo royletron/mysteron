@@ -27,6 +27,6 @@ Both done.
 
 Files: `web/src/AgentLog.tsx`, `web/src/TicketPage.tsx`.
 
-Verified: `npm run typecheck` clean, `vite build` succeeds, `npm test` 17/17 pass. Committed as `96f72a7` with the `Henson-Companion: Waldorf the Compiler` trailer.
+Verified: `npm run typecheck` clean, `vite build` succeeds, `npm test` 17/17 pass. Committed as `96f72a7` with the `Mysteron-Companion: Waldorf the Compiler` trailer.
 
 Note on the earlier "Tone down Pulsing" ticket: that removed avatar pulsing from the board/header (the general running indicator). This is a deliberately different, explicitly-requested case — a dedicated loading indicator inside the log — so I used the gentle `.pulse` (opacity breathe, reduced-motion-safe) rather than re-introducing the halo ring that was toned down.

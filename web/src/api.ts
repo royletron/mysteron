@@ -1,4 +1,4 @@
-// API client + shared types for the Henson web UI. Types mirror the server's
+// API client + shared types for the Mysteron web UI. Types mirror the server's
 // JSON responses (see src/server/api.ts).
 
 export type TicketState = "backlog" | "ready" | "in-progress" | "review" | "done" | "bin";

@@ -14,7 +14,7 @@ import {
  * Why: the real, authoritative usage numbers (5h-session + weekly utilization,
  * reset times, status) only come back as `anthropic-ratelimit-unified-*` HTTP
  * response headers, which Claude Code keeps in memory and never exposes. Since
- * Henson is the one launching `claude`, we route its traffic through this proxy
+ * Mysteron is the one launching `claude`, we route its traffic through this proxy
  * (via ANTHROPIC_BASE_URL) and skim those headers off real responses — no extra
  * quota spent, no keychain hacking, and it works for any account type.
  *
@@ -85,7 +85,7 @@ export async function startRateLimitProxy(opts: {
     );
     proxyReq.on("error", (err) => {
       if (!res.headersSent) res.writeHead(502, { "content-type": "text/plain" });
-      res.end(`henson rate-limit proxy: upstream error: ${err.message}`);
+      res.end(`mysteron rate-limit proxy: upstream error: ${err.message}`);
     });
     req.pipe(proxyReq);
   });

@@ -27,6 +27,6 @@ All three done, as one coherent layout pass.
 
 Files: `web/src/Project.tsx`, `web/src/Board.tsx`, `web/src/api.ts`.
 
-Verified: `npm run typecheck` clean, `vite build` succeeds, `npm test` 17/17 pass. Committed as `480c2cb` with the `Henson-Companion: Waldorf the Compiler` trailer.
+Verified: `npm run typecheck` clean, `vite build` succeeds, `npm test` 17/17 pass. Committed as `480c2cb` with the `Mysteron-Companion: Waldorf the Compiler` trailer.
 
 Note: the sticky bar is offset `top-[52px]` to sit just beneath the existing sticky app header — worth a quick visual check at review since that offset is tied to the header's current height.

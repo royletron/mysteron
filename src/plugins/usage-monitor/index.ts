@@ -8,8 +8,8 @@ import { readSnapshot, type Bucket } from "./snapshot.js";
 /**
  * Token limit lookup order: project config → env var → default.
  * The default (5M) is intentionally generous — calibrate to your actual plan
- * via pluginOptions["usage-monitor"].tokenLimit in .henson/config.json or by
- * setting HENSON_USAGE_TOKEN_LIMIT in the environment.
+ * via pluginOptions["usage-monitor"].tokenLimit in .mysteron/config.json or by
+ * setting MYSTERON_USAGE_TOKEN_LIMIT in the environment.
  *
  * This only governs the *estimate* path (API-key budgets and the no-live-data
  * fallback). For subscription accounts with a fresh capture, we use the real
@@ -18,7 +18,7 @@ import { readSnapshot, type Bucket } from "./snapshot.js";
 function tokenLimit(config?: ProjectConfig): { limit: number; source: "config" | "env" | "default" } {
   const fromConfig = config?.pluginOptions?.["usage-monitor"]?.tokenLimit;
   if (fromConfig && fromConfig > 0) return { limit: fromConfig, source: "config" };
-  const raw = process.env.HENSON_USAGE_TOKEN_LIMIT;
+  const raw = process.env.MYSTERON_USAGE_TOKEN_LIMIT;
   const fromEnv = raw ? Number(raw) : NaN;
   if (Number.isFinite(fromEnv) && fromEnv > 0) return { limit: fromEnv, source: "env" };
   return { limit: 5_000_000, source: "default" };
@@ -27,14 +27,14 @@ function tokenLimit(config?: ProjectConfig): { limit: number; source: "config" |
 function windowHours(config?: ProjectConfig): number {
   const fromConfig = config?.pluginOptions?.["usage-monitor"]?.windowHours;
   if (fromConfig && fromConfig > 0) return fromConfig;
-  const raw = process.env.HENSON_USAGE_WINDOW_HOURS;
+  const raw = process.env.MYSTERON_USAGE_WINDOW_HOURS;
   const n = raw ? Number(raw) : NaN;
   return Number.isFinite(n) && n > 0 ? n : 5;
 }
 
 /** How fresh a captured snapshot must be to be trusted as "live". */
 function liveTtlMs(): number {
-  const raw = process.env.HENSON_USAGE_LIVE_TTL_MIN;
+  const raw = process.env.MYSTERON_USAGE_LIVE_TTL_MIN;
   const n = raw ? Number(raw) : NaN;
   return (Number.isFinite(n) && n > 0 ? n : 15) * 60_000;
 }

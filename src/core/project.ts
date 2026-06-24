@@ -10,7 +10,7 @@ import {
   docsDir,
   memoryDir,
   projectConfigPath,
-  projectHensonDir,
+  projectMysteronDir,
 } from "./paths.js";
 import { registerProject } from "./registry.js";
 import type { ProjectConfig } from "./types.js";
@@ -30,7 +30,7 @@ A short contract for any agent working in this project.
 function defaultSpec(name: string): string {
   return `# ${name}
 
-> Project specification. Edit this in the Henson web UI or directly on disk —
+> Project specification. Edit this in the Mysteron web UI or directly on disk —
 > changes are watched and can be turned into tickets.
 
 ## Overview
@@ -68,7 +68,7 @@ export async function saveProjectConfig(
   projectRoot: string,
   config: ProjectConfig,
 ): Promise<void> {
-  await fs.mkdir(projectHensonDir(projectRoot), { recursive: true });
+  await fs.mkdir(projectMysteronDir(projectRoot), { recursive: true });
   await fs.writeFile(
     projectConfigPath(projectRoot),
     JSON.stringify(config, null, 2) + "\n",
@@ -95,25 +95,25 @@ export interface ImportedDoc {
 
 export interface InitResult {
   config: ProjectConfig;
-  /** Docs discovered in the project and imported into .henson/docs. */
+  /** Docs discovered in the project and imported into .mysteron/docs. */
   importedDocs: ImportedDoc[];
-  /** True if Henson was already initialised here (nothing was scaffolded). */
+  /** True if Mysteron was already initialised here (nothing was scaffolded). */
   alreadyInitialised: boolean;
   /**
-   * True when an existing committed .henson/config.json was found and adopted —
+   * True when an existing committed .mysteron/config.json was found and adopted —
    * e.g. the project was cloned from a machine where it was already set up. The
    * shared companion identity, board, docs and memory are reused as-is.
    */
   adopted: boolean;
   /**
-   * True when a .henson/ folder existed but had no usable config.json, so a new
+   * True when a .mysteron/ folder existed but had no usable config.json, so a new
    * config was written while preserving any existing board/docs/memory.
    */
   repaired: boolean;
 }
 
 /**
- * Initialise Henson inside an existing project folder: create the .henson
+ * Initialise Mysteron inside an existing project folder: create the .mysteron
  * scaffold, generate a companion, import any docs already in the project,
  * seed SPEC + ETIQUETTE docs, and register it.
  */
@@ -138,8 +138,8 @@ export async function initProject(
     };
   }
 
-  // A .henson/ folder with no usable config means a half-present / corrupt setup.
-  const repaired = await dirExists(projectHensonDir(abs));
+  // A .mysteron/ folder with no usable config means a half-present / corrupt setup.
+  const repaired = await dirExists(projectMysteronDir(abs));
 
   const name = opts.name ?? path.basename(abs);
   await fs.mkdir(boardDir(abs), { recursive: true });

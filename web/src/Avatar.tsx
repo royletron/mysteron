@@ -3,7 +3,7 @@ import type { Companion } from "./api";
 
 export type AvatarVariant = "beam" | "marble" | "pixel" | "sunset" | "ring" | "bauhaus";
 
-// Henson's palette (colorhunt 450693 / 8C00FF / FF3F7F / FFC400), so avatars sit
+// Mysteron's palette (colorhunt 450693 / 8C00FF / FF3F7F / FFC400), so avatars sit
 // on-brand against the dark UI.
 export const COLORS = ["#450693", "#8c00ff", "#ff3f7f", "#ffc400"];
 

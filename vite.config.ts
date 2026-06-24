@@ -12,7 +12,7 @@ const commitSha = (() => {
   }
 })();
 
-// The Henson web UI. Builds to dist/server/public so the Express server serves
+// The Mysteron web UI. Builds to dist/server/public so the Express server serves
 // it as static assets (headless-friendly — no separate frontend process in prod).
 export default defineConfig({
   root: "web",
@@ -23,11 +23,11 @@ export default defineConfig({
     // In dev, proxy API + the live WebSocket to the running Express server.
     proxy: {
       "/api": {
-        target: process.env.HENSON_DEV_API ?? "http://127.0.0.1:4319",
+        target: process.env.MYSTERON_DEV_API ?? "http://127.0.0.1:4319",
         changeOrigin: true,
       },
       "/ws": {
-        target: process.env.HENSON_DEV_API ?? "http://127.0.0.1:4319",
+        target: process.env.MYSTERON_DEV_API ?? "http://127.0.0.1:4319",
         ws: true,
         changeOrigin: true,
       },

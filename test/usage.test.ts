@@ -4,9 +4,9 @@ import os from "node:os";
 import path from "node:path";
 import { after, test } from "node:test";
 
-// Isolate the snapshot file under a temp HENSON_HOME.
-const tmp = path.join(os.tmpdir(), `henson-usage-${process.pid}`);
-process.env.HENSON_HOME = path.join(tmp, "home");
+// Isolate the snapshot file under a temp MYSTERON_HOME.
+const tmp = path.join(os.tmpdir(), `mysteron-usage-${process.pid}`);
+process.env.MYSTERON_HOME = path.join(tmp, "home");
 
 const { parseUnifiedLimits, extractRateLimitHeaders, readSnapshot } = await import(
   "../src/plugins/usage-monitor/snapshot.js"

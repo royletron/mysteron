@@ -1,10 +1,10 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { projectHensonDir } from "./paths.js";
+import { projectMysteronDir } from "./paths.js";
 
 /** Directories we never crawl when looking for existing docs. */
 const IGNORE_DIRS = new Set([
-  "node_modules", ".git", ".henson", "dist", "build", "out", "coverage",
+  "node_modules", ".git", ".mysteron", "dist", "build", "out", "coverage",
   "vendor", "target", ".next", ".cache", ".svelte-kit", "tmp", ".idea", ".vscode",
 ]);
 
@@ -18,7 +18,7 @@ export interface DiscoveredDoc {
   sourcePath: string;
   /** Path relative to the project root (for display). */
   relPath: string;
-  /** Unique name it will be imported as under .henson/docs. */
+  /** Unique name it will be imported as under .mysteron/docs. */
   importName: string;
   kind: DiscoveredKind;
   bytes: number;
@@ -72,22 +72,22 @@ async function walk(
 }
 
 /**
- * Find markdown/text docs that already exist in a project, so `henson init` can
+ * Find markdown/text docs that already exist in a project, so `mysteron init` can
  * import them instead of starting from a blank slate. Scans the project root
  * plus any docs/ (and similar) directories, ignoring build/vendor dirs and the
- * .henson folder itself.
+ * .mysteron folder itself.
  */
 export async function discoverProjectDocs(projectRoot: string): Promise<DiscoveredDoc[]> {
   const abs = path.resolve(projectRoot);
-  const hensonDir = projectHensonDir(abs);
+  const mysteronDir = projectMysteronDir(abs);
   const found: { sourcePath: string; relPath: string }[] = [];
   await walk(abs, abs, 0, 3, found);
 
   const usedNames = new Set<string>();
   const docs: DiscoveredDoc[] = [];
   for (const f of found) {
-    // Never re-import anything already living under .henson.
-    if (f.sourcePath.startsWith(hensonDir + path.sep)) continue;
+    // Never re-import anything already living under .mysteron.
+    if (f.sourcePath.startsWith(mysteronDir + path.sep)) continue;
 
     const base = path.basename(f.sourcePath);
     let importName = base;

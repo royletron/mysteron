@@ -46,21 +46,21 @@ function parseArgs(argv: string[]): { positionals: string[]; flags: Flags } {
   return { positionals, flags };
 }
 
-const HELP = `🎭  Henson — manage AI agents across your projects.
+const HELP = `🎭  Mysteron — manage AI agents across your projects.
 
 Usage:
-  henson init [path] [--name <name>] [--yolo] [--no-import]
-                                                 Initialise Henson in a project folder
+  mysteron init [path] [--name <name>] [--yolo] [--no-import]
+                                                 Initialise Mysteron in a project folder
                                                  (imports existing docs unless --no-import)
-  henson register <path>                         Register an existing Henson project
-  henson unregister <id|path>                    Remove a project from the registry
-  henson list                                    List registered projects
-  henson serve [--port <n>] [--host <h>] [-v|--verbose]
+  mysteron register <path>                         Register an existing Mysteron project
+  mysteron unregister <id|path>                    Remove a project from the registry
+  mysteron list                                    List registered projects
+  mysteron serve [--port <n>] [--host <h>] [-v|--verbose]
                                                  Start the web UI + API (verbose logs requests/errors/runs)
-  henson mcp [id|path]                           Run the MCP server (stdio) for a project
-  henson ticket list <id|path>                   List a project's tickets
-  henson ticket add <id|path> <title...>         Add a ticket (to backlog)
-  henson help                                    Show this help
+  mysteron mcp [id|path]                           Run the MCP server (stdio) for a project
+  mysteron ticket list <id|path>                   List a project's tickets
+  mysteron ticket add <id|path> <title...>         Add a ticket (to backlog)
+  mysteron help                                    Show this help
 `;
 
 async function resolveRoot(idOrPath?: string): Promise<string> {
@@ -86,18 +86,18 @@ async function main(): Promise<void> {
         },
       );
       if (adopted) {
-        console.log(`Adopted existing Henson project "${config.name}" (recipe: ${config.recipe}).`);
+        console.log(`Adopted existing Mysteron project "${config.name}" (recipe: ${config.recipe}).`);
         console.log(`  Companions: ${roster(config)}`);
         console.log(
-          `  Shared board, docs and memory from .henson/ are reused — same identity (${config.id}) as elsewhere.`,
+          `  Shared board, docs and memory from .mysteron/ are reused — same identity (${config.id}) as elsewhere.`,
         );
-        console.log(`  Registered on this machine. Run "henson serve" to view it.`);
+        console.log(`  Registered on this machine. Run "mysteron serve" to view it.`);
         break;
       }
       console.log(`${repaired ? "Repaired" : "Initialised"} "${config.name}" (recipe: ${config.recipe})`);
       console.log(`  Companions: ${roster(config)}`);
       if (repaired) {
-        console.log(`  (found a .henson/ folder without a config — wrote a new one, kept existing board/docs/memory)`);
+        console.log(`  (found a .mysteron/ folder without a config — wrote a new one, kept existing board/docs/memory)`);
       }
       console.log(`  plugins: ${config.plugins.join(", ") || "(none)"}  yolo: ${config.yolo}`);
       if (importedDocs.length) {
@@ -106,7 +106,7 @@ async function main(): Promise<void> {
           console.log(`    ${d.from} → docs/${d.importName}${d.kind === "spec" ? "  (used as SPEC)" : ""}`);
         }
       }
-      console.log(`Run "henson serve" then open the web UI to manage the board.`);
+      console.log(`Run "mysteron serve" then open the web UI to manage the board.`);
       break;
     }
     case "register": {
@@ -119,7 +119,7 @@ async function main(): Promise<void> {
         console.log(`Adopted ${entry.name} [${entry.id}] -> ${entry.path}\n  Companions: ${roster(cfg)}`);
       } else {
         console.log(
-          `Registered ${entry.name} [${entry.id}] -> ${entry.path}\n  Note: no .henson/config.json here — run "henson init ${positionals[0]}" to set it up.`,
+          `Registered ${entry.name} [${entry.id}] -> ${entry.path}\n  Note: no .mysteron/config.json here — run "mysteron init ${positionals[0]}" to set it up.`,
         );
       }
       break;
@@ -133,7 +133,7 @@ async function main(): Promise<void> {
     case "list": {
       const reg = await loadRegistry();
       if (reg.projects.length === 0) {
-        console.log("No projects registered. Try: henson init");
+        console.log("No projects registered. Try: mysteron init");
         break;
       }
       for (const p of reg.projects) {
@@ -172,7 +172,7 @@ async function main(): Promise<void> {
         const t = await createTicket(root, { title });
         console.log(`Added ticket ${t.id}: ${t.title}`);
       } else {
-        console.log("Usage: henson ticket <list|add> <id|path> [title...]");
+        console.log("Usage: mysteron ticket <list|add> <id|path> [title...]");
       }
       break;
     }
@@ -190,6 +190,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-  console.error(`henson: ${(err as Error).message}`);
+  console.error(`mysteron: ${(err as Error).message}`);
   process.exitCode = 1;
 });

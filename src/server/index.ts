@@ -34,9 +34,9 @@ export interface ServeOptions {
 }
 
 export async function serve(opts: ServeOptions = {}): Promise<{ port: number; close: () => Promise<void> }> {
-  const port = opts.port ?? Number(process.env.HENSON_PORT ?? 4319);
-  const host = opts.host ?? process.env.HENSON_HOST ?? "127.0.0.1";
-  const verbose = opts.verbose ?? Boolean(process.env.HENSON_VERBOSE);
+  const port = opts.port ?? Number(process.env.MYSTERON_PORT ?? 4319);
+  const host = opts.host ?? process.env.MYSTERON_HOST ?? "127.0.0.1";
+  const verbose = opts.verbose ?? Boolean(process.env.MYSTERON_VERBOSE);
 
   const watcher = new ProjectWatcher();
   await watcher.start();
@@ -44,18 +44,18 @@ export async function serve(opts: ServeOptions = {}): Promise<{ port: number; cl
   // Capture proxy for real Claude usage limits. We route spawned `claude`
   // traffic through it (see runner/manager.ts) so we can read the
   // `anthropic-ratelimit-unified-*` response headers — the only source of true
-  // session/weekly utilization. Opt out with HENSON_RATELIMIT_PROXY=0. A failure
+  // session/weekly utilization. Opt out with MYSTERON_RATELIMIT_PROXY=0. A failure
   // here must never stop the server: we just fall back to the JSONL estimate.
   let rateLimitProxy: RateLimitProxy | undefined;
-  if (process.env.HENSON_RATELIMIT_PROXY !== "0") {
+  if (process.env.MYSTERON_RATELIMIT_PROXY !== "0") {
     try {
       rateLimitProxy = await startRateLimitProxy();
       // The child env var the run manager reads (kept separate from
       // ANTHROPIC_BASE_URL so the proxy's own upstream isn't pointed at itself).
-      process.env.HENSON_RATELIMIT_PROXY_URL = rateLimitProxy.url;
-      if (verbose) console.log(`[henson] rate-limit capture proxy at ${rateLimitProxy.url}`);
+      process.env.MYSTERON_RATELIMIT_PROXY_URL = rateLimitProxy.url;
+      if (verbose) console.log(`[mysteron] rate-limit capture proxy at ${rateLimitProxy.url}`);
     } catch (err) {
-      console.warn(`[henson] rate-limit proxy failed to start: ${(err as Error).message}`);
+      console.warn(`[mysteron] rate-limit proxy failed to start: ${(err as Error).message}`);
     }
   }
 
@@ -63,7 +63,7 @@ export async function serve(opts: ServeOptions = {}): Promise<{ port: number; cl
   // Load persisted agent-run history so a ticket's past runs survive restarts.
   const registry = await loadRegistry();
   const loaded = await runs.hydrate(registry.projects.map((p) => ({ projectId: p.id, projectRoot: p.path })));
-  if (verbose && loaded) console.log(`[henson] loaded ${loaded} persisted run(s)`);
+  if (verbose && loaded) console.log(`[mysteron] loaded ${loaded} persisted run(s)`);
   const autopilot = new Autopilot(runs);
 
   // Sweep tickets that have sat in "done" for 48h into the bin — now and hourly.
@@ -83,11 +83,11 @@ export async function serve(opts: ServeOptions = {}): Promise<{ port: number; cl
   binTimer.unref?.();
 
   if (verbose) {
-    bus.on("henson", (e) => console.log("[henson] event", e));
-    bus.on("autopilot", (e) => console.log("[henson] autopilot", e));
+    bus.on("mysteron", (e) => console.log("[mysteron] event", e));
+    bus.on("autopilot", (e) => console.log("[mysteron] autopilot", e));
     bus.on("run", (e: RunEvent) => {
-      if (e.kind === "status") console.log(`[henson] run ${e.runId} → ${e.status} (exit ${e.exitCode})`);
-      else if (e.kind === "line" && e.line?.stream === "system") console.log(`[henson] run ${e.runId}: ${e.line.text}`);
+      if (e.kind === "status") console.log(`[mysteron] run ${e.runId} → ${e.status} (exit ${e.exitCode})`);
+      else if (e.kind === "line" && e.line?.stream === "system") console.log(`[mysteron] run ${e.runId}: ${e.line.text}`);
     });
   }
 
@@ -110,7 +110,7 @@ export async function serve(opts: ServeOptions = {}): Promise<{ port: number; cl
   return new Promise((resolveServer) => {
     const server = app.listen(port, host, () => {
       // eslint-disable-next-line no-console
-      console.log(`🎭  Henson is running at http://${host}:${port}${verbose ? "  (verbose)" : ""}`);
+      console.log(`🎭  Mysteron is running at http://${host}:${port}${verbose ? "  (verbose)" : ""}`);
       resolveServer({
         port,
         close: async () => {

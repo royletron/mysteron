@@ -1,10 +1,10 @@
 {
-  "name": "henson",
+  "name": "mysteron",
   "version": "0.1.0",
   "description": "A framework for managing AI agents across your projects — shared boards, docs, memory, and companion agent sessions.",
   "type": "module",
   "bin": {
-    "henson": "./dist/cli.js"
+    "mysteron": "./dist/cli.js"
   },
   "main": "./dist/core/index.js",
   "scripts": {

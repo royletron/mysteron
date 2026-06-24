@@ -26,4 +26,4 @@ Done. Used **CodeMirror 6** with `@codemirror/lang-markdown` as the editor (live
 
 Verified: `npm run typecheck` clean, `npm test` 17/17 pass, `vite build` succeeds.
 
-Note on attribution: a concurrent bulk commit (`fd20096`) swept the whole working tree — including these changes — into history before I committed, so the `Henson-Companion: Waldorf the Compiler` trailer is not on the commit. The work itself is fully present in HEAD.
+Note on attribution: a concurrent bulk commit (`fd20096`) swept the whole working tree — including these changes — into history before I committed, so the `Mysteron-Companion: Waldorf the Compiler` trailer is not on the commit. The work itself is fully present in HEAD.

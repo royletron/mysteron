@@ -12,4 +12,4 @@ attachments:
   - Screenshot 2026-06-24 at 01.48.30.png
 ---
 
-I have attached two screens, one is what Henson is telling me is left in my account. The other is what Claude is saying I have left with usage - you can see that I actually have a little left, but Henson doesn't see it.
+I have attached two screens, one is what Mysteron is telling me is left in my account. The other is what Claude is saying I have left with usage - you can see that I actually have a little left, but Mysteron doesn't see it.

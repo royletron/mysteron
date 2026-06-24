@@ -11,9 +11,9 @@ function envMs(name: string, fallback: number): number {
 }
 
 // How long to wait between polls when idle / paused, and to breathe between tickets.
-const IDLE_POLL_MS = () => envMs("HENSON_AUTOPILOT_IDLE_MS", 15_000);
-const BUDGET_RECHECK_MS = () => envMs("HENSON_AUTOPILOT_BUDGET_MS", 30_000);
-const BREATHER_MS = () => envMs("HENSON_AUTOPILOT_BREATHER_MS", 1_500);
+const IDLE_POLL_MS = () => envMs("MYSTERON_AUTOPILOT_IDLE_MS", 15_000);
+const BUDGET_RECHECK_MS = () => envMs("MYSTERON_AUTOPILOT_BUDGET_MS", 30_000);
+const BREATHER_MS = () => envMs("MYSTERON_AUTOPILOT_BREATHER_MS", 1_500);
 
 const MAX_ACTIVITY = 50;
 

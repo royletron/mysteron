@@ -1,11 +1,11 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { hensonHome } from "../../core/paths.js";
+import { mysteronHome } from "../../core/paths.js";
 
 /**
  * The latest rate-limit reading captured from Anthropic's API response headers
  * by the capture proxy (see proxy.ts). Rate limits are per-account / per-machine
- * (not per-project), so a single snapshot lives under the central Henson home.
+ * (not per-project), so a single snapshot lives under the central Mysteron home.
  */
 export interface RateLimitSnapshot {
   /** When these headers were seen. */
@@ -36,7 +36,7 @@ export interface UnifiedLimits {
 }
 
 function snapshotPath(): string {
-  return path.join(hensonHome(), "ratelimit-snapshot.json");
+  return path.join(mysteronHome(), "ratelimit-snapshot.json");
 }
 
 function num(v: string | undefined): number | undefined {
