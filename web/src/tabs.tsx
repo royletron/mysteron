@@ -84,8 +84,8 @@ export function DocsTab({ detail }: { detail: ProjectDetail }) {
   );
 
   return (
-    <div class="grid grid-cols-[260px_1fr] gap-4">
-      <div class="card self-start">
+    <div class="md:grid md:grid-cols-[260px_1fr] md:gap-4">
+      <div class={`card self-start ${selected ? "hidden md:block" : ""}`}>
         {docs.length === 0 && <div class="text-sm text-zinc-500">No docs yet.</div>}
         {docs.map((d) => (
           <div
@@ -109,12 +109,15 @@ export function DocsTab({ detail }: { detail: ProjectDetail }) {
         </button>
       </div>
 
-      <div class="card">
+      <div class={`card ${selected ? "" : "hidden md:block"}`}>
         {!selected ? (
           <div class="text-sm text-zinc-500">Select a doc to view and edit.</div>
         ) : (
           <>
-            <div class="mb-2.5 flex items-center gap-2">
+            <div class="mb-2.5 flex flex-wrap items-center gap-2">
+              <button class="btn btn-ghost btn-sm md:hidden" onClick={() => setSelected(null)}>
+                ← Files
+              </button>
               <b>{selected}</b>
               {dirty && <span class="text-xs text-amber-400">● unsaved</span>}
               <div class="flex-1" />

@@ -14,6 +14,7 @@ import { useAsync, useRunStream } from "./hooks";
 import { ErrorBox, LiveDot, Loading, RunTimer } from "./ui";
 import { Avatar } from "./Avatar";
 import { AgentLog, AgentThinking } from "./AgentLog";
+import { ChevronDown, ChevronUp } from "lucide-preact";
 import type { AppEvent } from "./App";
 
 interface TicketData {
@@ -39,6 +40,8 @@ export function TicketPage({
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [lines, setLines] = useState<RunLine[]>([]);
   const [liveStatus, setLiveStatus] = useState<{ status: RunStatus; exitCode?: number | null } | null>(null);
+  // Mobile: whether the expanded "details" drawer is open.
+  const [infoOpen, setInfoOpen] = useState(false);
 
   // Autostart (arrived via the ▶ play button): strip the marker and launch the
   // agent here so there's no race between starting the run and opening the page.
@@ -158,11 +161,98 @@ export function TicketPage({
     }
   };
 
+  // Reusable bits (rendered in the desktop card, the mobile sticky bar, and the
+  // mobile drawer) — functions so each call returns fresh vnodes.
+  const statusPill = () => (
+    <span class={`pill gap-1.5 ${statusInfo?.color ?? "text-zinc-500"}`}>
+      {statusInfo?.live && <LiveDot />}
+      {statusInfo?.label ?? "idle"}
+    </span>
+  );
+  const runMeta = () => (
+    <>
+      {timerRun && <RunTimer run={timerRun} class="text-sm text-zinc-400" />}
+      {timerRun?.costUsd != null && (
+        <span class="text-sm text-zinc-400" title={timerRun.numTurns != null ? `${timerRun.numTurns} turns` : undefined}>
+          {fmtCost(timerRun.costUsd)}
+        </span>
+      )}
+    </>
+  );
+  const playStop = (small = false) =>
+    active ? (
+      <button class={`btn btn-danger ${small ? "btn-sm" : ""}`} title="Stop agent" onClick={stopRun}>
+        ■
+      </button>
+    ) : (
+      <button class={`btn btn-primary ${small ? "btn-sm" : ""}`} title="Run agent" onClick={startRun}>
+        ▶
+      </button>
+    );
+  const infoDetails = () => (
+    <>
+      <div class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
+        <b class="text-zinc-400">State</b>
+        <span>{ticket.state}</span>
+        <b class="text-zinc-400">Priority</b>
+        <span>{ticket.priority}</span>
+        <b class="text-zinc-400">Companion</b>
+        <span class="inline-flex items-center gap-1.5">
+          {assigned ? (
+            <>
+              <Avatar companion={assigned} size={18} /> {assigned.name}
+            </>
+          ) : (
+            ticket.assignee || "—"
+          )}
+        </span>
+        <b class="text-zinc-400">Ticket id</b>
+        <span class="font-mono">{ticket.id}</span>
+      </div>
+      <label class="field-label">Description</label>
+      <pre class="max-h-[220px] overflow-auto whitespace-pre-wrap rounded-sm border border-zinc-800 bg-zinc-950 p-2.5 font-mono text-xs">
+        {ticket.body || "(no description)"}
+      </pre>
+      <label class="field-label">Run history</label>
+      {runs.length === 0 ? (
+        <div class="text-sm text-zinc-500">No runs yet.</div>
+      ) : (
+        <div class="flex flex-col gap-1">
+          {runs.map((r) => (
+            <button
+              key={r.id}
+              title={r.command}
+              onClick={() => {
+                setSelectedRunId(r.id);
+                setInfoOpen(false);
+              }}
+              class={`flex items-center justify-between gap-2 rounded-sm border px-2 py-1 text-left text-xs ${
+                r.id === selectedRunId
+                  ? "border-violet-500 text-zinc-100"
+                  : "border-zinc-800 text-zinc-400 hover:border-zinc-600"
+              }`}
+            >
+              <span class={`inline-flex items-center gap-1.5 ${RUN_STATUS[r.status]?.color}`}>
+                {RUN_STATUS[r.status]?.live && <LiveDot />}
+                {RUN_STATUS[r.status]?.label || r.status}
+              </span>
+              <span class="text-zinc-500">
+                {fmtWhen(r.startedAt)}
+                <RunTimer run={r} prefix=" · " />
+                {r.costUsd != null && ` · ${fmtCost(r.costUsd)}`}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </>
+  );
+
   return (
     <div>
       <div class="mb-4 flex items-center gap-3">
         {lead ? <Avatar companion={lead} size={34} /> : null}
-        <div>
+        <div class="min-w-0">
           <h1 class="text-xl font-semibold">{ticket.title}</h1>
           <div class="text-sm text-zinc-400">
             {detail.entry.name}
@@ -171,82 +261,27 @@ export function TicketPage({
         </div>
       </div>
 
-      <div class="grid grid-cols-[minmax(280px,360px)_1fr] items-start gap-4">
-        <div class="flex flex-col self-stretch">
+      {/* Mobile: compact sticky status bar (the full Info card is hidden). */}
+      <div class="sticky top-[52px] z-10 -mx-4 mb-4 flex items-center gap-2 border-b border-zinc-800 bg-zinc-950/80 px-4 py-2 backdrop-blur md:hidden">
+        {statusPill()}
+        {runMeta()}
+        <div class="flex-1" />
+        {playStop(true)}
+        <button class="btn btn-sm" aria-label="Show details" title="Show details" onClick={() => setInfoOpen(true)}>
+          <ChevronDown size={16} />
+        </button>
+      </div>
+
+      <div class="grid grid-cols-1 items-start gap-4 md:grid-cols-[minmax(280px,360px)_1fr]">
+        <div class="hidden flex-col self-stretch md:flex">
           <div class="card sticky top-20">
-          <div class="mb-3 flex items-center gap-2">
-            <span class={`pill gap-1.5 ${statusInfo?.color ?? "text-zinc-500"}`}>
-              {statusInfo?.live && <LiveDot />}
-              {statusInfo?.label ?? "idle"}
-            </span>
-            {timerRun && <RunTimer run={timerRun} class="text-sm text-zinc-400" />}
-            {timerRun?.costUsd != null && (
-              <span class="text-sm text-zinc-400" title={timerRun.numTurns != null ? `${timerRun.numTurns} turns` : undefined}>
-                {fmtCost(timerRun.costUsd)}
-              </span>
-            )}
-            <div class="flex-1" />
-            {active ? (
-              <button class="btn btn-danger" title="Stop agent" onClick={stopRun}>
-                ■
-              </button>
-            ) : (
-              <button class="btn btn-primary" title="Run agent" onClick={startRun}>
-                ▶
-              </button>
-            )}
-          </div>
-          <div class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
-            <b class="text-zinc-400">State</b>
-            <span>{ticket.state}</span>
-            <b class="text-zinc-400">Priority</b>
-            <span>{ticket.priority}</span>
-            <b class="text-zinc-400">Companion</b>
-            <span class="inline-flex items-center gap-1.5">
-              {assigned ? (
-                <>
-                  <Avatar companion={assigned} size={18} /> {assigned.name}
-                </>
-              ) : (
-                ticket.assignee || "—"
-              )}
-            </span>
-            <b class="text-zinc-400">Ticket id</b>
-            <span class="font-mono">{ticket.id}</span>
-          </div>
-          <label class="field-label">Description</label>
-          <pre class="max-h-[220px] overflow-auto whitespace-pre-wrap rounded-sm border border-zinc-800 bg-zinc-950 p-2.5 font-mono text-xs">
-            {ticket.body || "(no description)"}
-          </pre>
-          <label class="field-label">Run history</label>
-          {runs.length === 0 ? (
-            <div class="text-sm text-zinc-500">No runs yet.</div>
-          ) : (
-            <div class="flex flex-col gap-1">
-              {runs.map((r) => (
-                <button
-                  key={r.id}
-                  title={r.command}
-                  onClick={() => setSelectedRunId(r.id)}
-                  class={`flex items-center justify-between gap-2 rounded-sm border px-2 py-1 text-left text-xs ${
-                    r.id === selectedRunId
-                      ? "border-violet-500 text-zinc-100"
-                      : "border-zinc-800 text-zinc-400 hover:border-zinc-600"
-                  }`}
-                >
-                  <span class={`inline-flex items-center gap-1.5 ${RUN_STATUS[r.status]?.color}`}>
-                    {RUN_STATUS[r.status]?.live && <LiveDot />}
-                    {RUN_STATUS[r.status]?.label || r.status}
-                  </span>
-                  <span class="text-zinc-500">
-                    {fmtWhen(r.startedAt)}
-                    <RunTimer run={r} prefix=" · " />
-                    {r.costUsd != null && ` · ${fmtCost(r.costUsd)}`}
-                  </span>
-                </button>
-              ))}
+            <div class="mb-3 flex items-center gap-2">
+              {statusPill()}
+              {runMeta()}
+              <div class="flex-1" />
+              {playStop()}
             </div>
-          )}
+            {infoDetails()}
           </div>
           <div class="flex-1" />
           <a href={`#/project/${projectId}`} class="btn btn-ghost btn-sm sticky bottom-4 mt-3 self-start">
@@ -279,6 +314,30 @@ export function TicketPage({
           </div>
         </div>
       </div>
+
+      {/* Mobile: expanded details drawer (full screen). */}
+      {infoOpen && (
+        <div class="fixed inset-0 z-50 flex flex-col bg-zinc-950 md:hidden">
+          <div class="flex items-center gap-2 border-b border-zinc-800 px-4 py-3">
+            <b>Details</b>
+            {statusPill()}
+            <div class="flex-1" />
+            <button class="btn btn-sm" aria-label="Close details" title="Close" onClick={() => setInfoOpen(false)}>
+              <ChevronUp size={16} />
+            </button>
+          </div>
+          <div class="flex-1 overflow-auto p-4">
+            {infoDetails()}
+            <a
+              href={`#/project/${projectId}`}
+              class="btn btn-ghost btn-sm mt-3"
+              onClick={() => setInfoOpen(false)}
+            >
+              ← board
+            </a>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

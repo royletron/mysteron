@@ -108,30 +108,34 @@ export function Project({ projectId, tab: urlTab, evt }: { projectId: string; ta
 
   return (
     <div>
-      <div class="mb-4 flex items-center gap-3">
-        <a href="#/" class="btn btn-ghost btn-sm">
-          ←
-        </a>
-        <Avatar seed={data.entry.name} variant="marble" size={34} />
-        <div>
-          <h1 class="text-xl font-semibold">{data.entry.name}</h1>
-          <div class="text-sm text-zinc-400">
-            {c.companions.length} companion{c.companions.length === 1 ? "" : "s"} · recipe: {c.recipe}
+      <div class="mb-4 flex flex-col gap-3 md:flex-row md:items-center">
+        <div class="flex min-w-0 items-center gap-3">
+          <a href="#/" class="btn btn-ghost btn-sm shrink-0">
+            ←
+          </a>
+          <Avatar seed={data.entry.name} variant="marble" size={30} />
+          <div class="min-w-0">
+            <h1 class="truncate text-xl font-semibold">{data.entry.name}</h1>
+            <div class="text-sm text-zinc-400">
+              {c.companions.length} companion{c.companions.length === 1 ? "" : "s"} · recipe: {c.recipe}
+            </div>
           </div>
         </div>
-        <div class="flex-1" />
-        <button
-          class={`btn btn-sm ${c.yolo ? "border-amber-400 text-amber-400" : "text-zinc-400"}`}
-          onClick={toggleYolo}
-          disabled={savingYolo}
-          title="Yolo: run the companion autonomously (bypass permission prompts) within the usage budget"
-        >
-          <span class={`inline-block h-2 w-2 rounded-full ${c.yolo ? "bg-amber-400" : "bg-zinc-600"}`} />
-          {c.yolo ? "⚡ Yolo on" : "Yolo off"}
-        </button>
-        <button class="btn btn-danger btn-sm" onClick={unregister}>
-          Unregister
-        </button>
+        <div class="hidden flex-1 md:block" />
+        <div class="flex items-center gap-2">
+          <button
+            class={`btn btn-sm ${c.yolo ? "border-amber-400 text-amber-400" : "text-zinc-400"}`}
+            onClick={toggleYolo}
+            disabled={savingYolo}
+            title="Yolo: run the companion autonomously (bypass permission prompts) within the usage budget"
+          >
+            <span class={`inline-block h-2 w-2 rounded-full ${c.yolo ? "bg-amber-400" : "bg-zinc-600"}`} />
+            {c.yolo ? "⚡ Yolo on" : "Yolo off"}
+          </button>
+          <button class="btn btn-danger btn-sm" onClick={unregister}>
+            Unregister
+          </button>
+        </div>
       </div>
 
       {data.pendingDocSync && (
@@ -152,25 +156,29 @@ export function Project({ projectId, tab: urlTab, evt }: { projectId: string; ta
 
       <div ref={sentinelRef} aria-hidden class="h-px" />
       <div
-        class={`sticky top-[52px] z-10 -mx-6 mb-4 flex items-center gap-1.5 px-6 transition-colors ${
+        class={`sticky top-[52px] z-10 -mx-4 mb-4 flex flex-col gap-2 transition-colors md:-mx-6 md:flex-row md:items-center ${
           stuck ? "border-b border-zinc-800 bg-zinc-950/80 backdrop-blur" : ""
         }`}
       >
-        {TABS.map(([key, label, Icon]) => (
-          <a
-            key={key}
-            href={`#/project/${projectId}/${key}`}
-            class={`inline-flex cursor-pointer items-center gap-1.5 border-b-2 px-4 py-2 ${
-              tab === key ? "border-violet-500 text-zinc-100" : "border-transparent text-zinc-400 hover:text-zinc-200"
-            }`}
-          >
-            <Icon size={15} class="shrink-0" />
-            {label}
-          </a>
-        ))}
-        <div class="flex-1" />
+        {/* Tabs scroll horizontally and bleed full-width on narrow screens. */}
+        <div class="overflow-x-auto md:flex-1">
+          <div class="flex w-max items-center gap-1.5 px-4 md:px-6">
+            {TABS.map(([key, label, Icon]) => (
+              <a
+                key={key}
+                href={`#/project/${projectId}/${key}`}
+                class={`inline-flex shrink-0 cursor-pointer items-center gap-1.5 border-b-2 px-4 py-2 ${
+                  tab === key ? "border-violet-500 text-zinc-100" : "border-transparent text-zinc-400 hover:text-zinc-200"
+                }`}
+              >
+                <Icon size={15} class="shrink-0" />
+                {label}
+              </a>
+            ))}
+          </div>
+        </div>
         {tab === "board" && (
-          <div class="flex items-center gap-2">
+          <div class="flex items-center gap-2 px-4 pb-2 md:px-6 md:pb-0">
             <button class="btn btn-primary btn-sm" onClick={() => setEditing("new")}>
               + Add ticket
             </button>

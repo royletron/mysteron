@@ -40,9 +40,11 @@ export function Board({
     <div>
       <AutopilotBar detail={detail} />
 
-      <div class="mb-3.5 text-sm text-zinc-500">Drag a card between columns to change its state.</div>
+      <div class="mb-3.5 hidden text-sm text-zinc-500 md:block">
+        Drag a card between columns to change its state.
+      </div>
 
-      <div class="grid grid-flow-col auto-cols-[minmax(250px,1fr)] gap-3.5 overflow-x-auto pb-2.5">
+      <div class="-mx-4 grid grid-flow-col auto-cols-[minmax(250px,1fr)] gap-3.5 overflow-x-auto px-4 pb-2.5 md:-mx-6 md:px-6">
         {detail.states.map((state) => {
           const tickets = detail.board[state] || [];
           return (

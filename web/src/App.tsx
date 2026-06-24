@@ -70,8 +70,8 @@ function AppShell() {
 
   return (
     <div class="flex min-h-[100dvh] flex-col">
-      <header class="sticky top-0 z-10 flex items-center gap-2 border-b border-zinc-800 bg-zinc-950/80 px-6 py-3 backdrop-blur">
-        <a href="#/" class="flex items-center gap-2">
+      <header class="sticky top-0 z-10 flex items-center gap-2 border-b border-zinc-800 bg-zinc-950/80 px-4 py-3 backdrop-blur md:px-6">
+        <a href="#/" class="flex shrink-0 items-center gap-2">
           <span class="relative inline-flex h-[26px] w-[26px] shrink-0 items-center justify-center">
             <span class="logo-glow" aria-hidden="true" />
             <img src={logoUrl} alt="" width={26} height={26} class="relative shrink-0" />
@@ -93,7 +93,7 @@ function AppShell() {
             {route.name === "ticket" && (
               <>
                 <span class="text-zinc-600">/</span>
-                <span class="truncate text-sm text-zinc-400">{ticketTitle ?? "Ticket"}</span>
+                <span class="min-w-0 truncate text-sm text-zinc-400">{ticketTitle ?? "Ticket"}</span>
               </>
             )}
           </>
@@ -103,7 +103,7 @@ function AppShell() {
 
         {projects.length > 0 && (
           <select
-            class="max-w-[200px] rounded-sm border border-zinc-800 bg-zinc-950 px-2 py-1 text-sm text-zinc-300 outline-none hover:border-violet-500 focus:border-violet-500"
+            class="hidden max-w-[200px] rounded-sm border border-zinc-800 bg-zinc-950 px-2 py-1 text-sm text-zinc-300 outline-none hover:border-violet-500 focus:border-violet-500 sm:block"
             value={route.projectId ?? ""}
             onChange={(e) => {
               const id = (e.target as HTMLSelectElement).value;
@@ -151,7 +151,7 @@ function AppShell() {
         </span>
       </header>
 
-      <main class="w-full flex-1 p-6">
+      <main class="w-full flex-1 p-4 md:p-6">
         {route.name === "home" && <Home evt={evt} />}
         {route.name === "project" && route.projectId && (
           <Project key={route.projectId} projectId={route.projectId} tab={route.tab} evt={evt} />
