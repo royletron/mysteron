@@ -195,12 +195,32 @@ export async function api<T>(path: string, opts?: RequestInit): Promise<T> {
     headers: { "Content-Type": "application/json" },
     ...opts,
   });
+  // A 401 on a normal API call means our session expired or the password
+  // changed — tell the app to show the login gate (but not for the auth
+  // endpoints themselves, which handle their own errors).
+  if (res.status === 401 && !path.startsWith("/api/auth/")) {
+    dispatchEvent(new Event("mysteron:unauth"));
+  }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error((body as { error?: string }).error || `${res.status} ${res.statusText}`);
   }
   return (res.status === 204 ? null : await res.json()) as T;
 }
+
+export interface AuthStatus {
+  /** Protection is on and gating requests. */
+  enabled: boolean;
+  /** This browser currently has a valid session. */
+  authed: boolean;
+  /** A password has been configured (may be on or off). */
+  passwordSet: boolean;
+}
+
+export const getAuthStatus = () => api<AuthStatus>("/api/auth/status");
+export const login = (password: string) =>
+  api<{ ok: boolean }>("/api/auth/login", { method: "POST", body: JSON.stringify({ password }) });
+export const logout = () => api<{ ok: boolean }>("/api/auth/logout", { method: "POST" });
 
 // ---- shared display constants -------------------------------------------
 export const STATE_LABELS: Record<TicketState, string> = {

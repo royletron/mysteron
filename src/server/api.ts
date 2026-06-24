@@ -34,6 +34,7 @@ import type { ProjectWatcher } from "../core/watcher.js";
 import { type RunManager, runSummary, CompanionBusyError } from "../runner/manager.js";
 import type { Autopilot } from "../runner/autopilot.js";
 import type { RunEvent } from "../core/events.js";
+import { registerAuth } from "./auth.js";
 
 interface ResolvedProject {
   entry: RegistryEntry;
@@ -101,6 +102,11 @@ export function registerApi(
       next();
     });
   }
+
+  // Optional password protection: gates every /api route (except /api/auth/*)
+  // and exposes the login/logout/settings endpoints. Registered before the
+  // project routes so the gate runs first.
+  registerAuth(app);
 
   // --- Projects ------------------------------------------------------------
   app.get("/api/projects", async (_req: Request, res: Response) => {

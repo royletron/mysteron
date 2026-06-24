@@ -2,6 +2,7 @@ import type { Server } from "node:http";
 import { WebSocketServer, type WebSocket } from "ws";
 import { bus, type AutopilotEvent, type MysteronEvent, type RunEvent } from "../core/events.js";
 import type { RunManager } from "../runner/manager.js";
+import { isAuthedByCookieHeader } from "./auth.js";
 
 /**
  * A single WebSocket per browser tab carries all live push data — global board/
@@ -19,7 +20,17 @@ import type { RunManager } from "../runner/manager.js";
  *   { channel: "run", evt }        a RunEvent (kind: line | status | started)
  */
 export function setupWebSocket(server: Server, runs: RunManager, verbose = false): void {
-  const wss = new WebSocketServer({ server, path: "/ws" });
+  // The live stream carries run output, so gate the upgrade behind the same
+  // cookie check as the REST API (no-op when protection is off).
+  const wss = new WebSocketServer({
+    server,
+    path: "/ws",
+    verifyClient: ({ req }, cb) => {
+      isAuthedByCookieHeader(req.headers.cookie)
+        .then((ok) => cb(ok, 401, "Unauthorized"))
+        .catch(() => cb(false, 500, "auth check failed"));
+    },
+  });
 
   // Fan global events out to every connected socket.
   const onMysteron = (evt: MysteronEvent) => broadcast({ channel: "global", evt });

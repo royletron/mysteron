@@ -1,9 +1,12 @@
 import { useEffect, useState } from "preact/hooks";
 import { useAsync, useGlobalEvents, useHashRoute, navigate } from "./hooks";
-import { api, type ProjectListItem } from "./api";
+import { api, getAuthStatus, type AuthStatus, type ProjectListItem } from "./api";
 import { Home } from "./Home";
 import { Project } from "./Project";
 import { TicketPage } from "./TicketPage";
+import { Settings } from "./Settings";
+import { Login } from "./Login";
+import { Loading } from "./ui";
 import { LiveDot } from "./ui";
 import logoUrl from "../images/m.png";
 
@@ -12,7 +15,41 @@ export interface AppEvent {
   projectId?: string;
 }
 
+/**
+ * Auth gate. Checks whether password protection is on and, if so, whether this
+ * browser is authed — showing the login screen until it is. Keeping this in a
+ * thin wrapper means the main app's hooks/fetches don't run (and can't 401) for
+ * an unauthenticated visitor.
+ */
 export function App() {
+  const [auth, setAuth] = useState<AuthStatus | "loading">("loading");
+  const refresh = () =>
+    getAuthStatus()
+      .then(setAuth)
+      // If the status probe itself fails, fail open rather than locking the user out.
+      .catch(() => setAuth({ enabled: false, authed: true, passwordSet: false }));
+
+  useEffect(() => {
+    refresh();
+  }, []);
+  useEffect(() => {
+    const onUnauth = () => setAuth((a) => (a !== "loading" ? { ...a, authed: false } : a));
+    addEventListener("mysteron:unauth", onUnauth);
+    return () => removeEventListener("mysteron:unauth", onUnauth);
+  }, []);
+
+  if (auth === "loading") {
+    return (
+      <div class="flex min-h-[100dvh] items-center justify-center">
+        <Loading what="Establishing contact…" />
+      </div>
+    );
+  }
+  if (auth.enabled && !auth.authed) return <Login onAuthed={refresh} />;
+  return <AppShell />;
+}
+
+function AppShell() {
   const route = useHashRoute();
   const [evt, setEvt] = useState<AppEvent>({ seq: 0 });
   const [ticketTitle, setTicketTitle] = useState<string>();
@@ -81,6 +118,28 @@ export function App() {
           </select>
         )}
 
+        <a
+          href="#/settings"
+          class="text-zinc-500 transition hover:rotate-45 hover:text-violet-300"
+          title="Settings"
+          aria-label="Settings"
+        >
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+        </a>
+
         <span
           class={`inline-flex items-center text-xs ${connected ? "text-emerald-400" : "text-zinc-600"}`}
           title="live updates"
@@ -104,6 +163,7 @@ export function App() {
             onTitle={setTicketTitle}
           />
         )}
+        {route.name === "settings" && <Settings />}
       </main>
 
       <Footer />
