@@ -61,10 +61,10 @@
   body {
     @apply text-zinc-100 antialiased;
     background-color: #0a0a0a;
-    /* A Mysteron red glow bleeds in from the top-right; a faint spectral-green
-       aura answers from the bottom-left. */
+    /* Two Mysteron-red orbs bleed in from opposite corners (top-right and
+       bottom-left), framing the dark field. */
     background-image:
-      radial-gradient(900px 480px at 8% 112%, rgba(0, 230, 118, 0.05) 0%, transparent 55%),
+      radial-gradient(820px 460px at 6% 112%, rgba(225, 6, 0, 0.16) 0%, transparent 56%),
       radial-gradient(1100px 560px at 84% -14%, rgba(225, 6, 0, 0.22) 0%, rgba(40, 8, 8, 0.6) 30%, #0a0a0a 62%);
     background-attachment: fixed;
     min-height: 100vh;
@@ -135,6 +135,19 @@
   .pulse {
     animation: pulse-soft 1.6s ease-in-out infinite;
   }
+  /* A menacing red heartbeat behind the circular logo mark — the "voice of the
+     Mysterons" throbbing through. Drop a `.logo-glow` span behind the logo <img>
+     inside a `relative` wrapper. */
+  .logo-glow {
+    @apply pointer-events-none absolute left-1/2 top-1/2 rounded-full;
+    height: 100%;
+    width: 100%;
+    background: #e10600;
+    filter: blur(6px);
+    transform: translate(-50%, -50%);
+    transform-origin: center;
+    animation: logo-pulse 2s ease-out infinite;
+  }
 }
 
 @keyframes drawer-in {
@@ -167,11 +180,45 @@
   }
 }
 
+/* A menacing heartbeat: a quick lub-dub, then a long ominous rest. */
+@keyframes logo-pulse {
+  0% {
+    opacity: 0.25;
+    transform: translate(-50%, -50%) scale(0.8);
+  }
+  10% {
+    opacity: 0.95;
+    transform: translate(-50%, -50%) scale(1.5);
+  }
+  20% {
+    opacity: 0.45;
+    transform: translate(-50%, -50%) scale(1.1);
+  }
+  30% {
+    opacity: 0.85;
+    transform: translate(-50%, -50%) scale(1.38);
+  }
+  44% {
+    opacity: 0.2;
+    transform: translate(-50%, -50%) scale(0.82);
+  }
+  100% {
+    opacity: 0.18;
+    transform: translate(-50%, -50%) scale(0.8);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .live-dot::after,
   .pulse,
-  .drawer {
+  .drawer,
+  .logo-glow {
     animation: none;
+  }
+  /* Keep a static halo rather than a frozen mid-beat frame. */
+  .logo-glow {
+    opacity: 0.4;
+    transform: translate(-50%, -50%) scale(1.1);
   }
 }
 

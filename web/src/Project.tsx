@@ -7,15 +7,25 @@ import { TicketPanel } from "./TicketPanel";
 import { DocsTab, MemoryTab, PluginsTab, CompanionTab, CommitsTab, BinTab } from "./tabs";
 import { Avatar } from "./Avatar";
 import type { AppEvent } from "./App";
+import {
+  Columns3,
+  FileText,
+  Brain,
+  GitCommitHorizontal,
+  Gauge,
+  Bot,
+  Trash2,
+  type LucideIcon,
+} from "lucide-preact";
 
-const TABS: [string, string][] = [
-  ["board", "Board"],
-  ["docs", "Docs"],
-  ["memory", "Memory"],
-  ["commits", "Commits"],
-  ["plugins", "Plugins & usage"],
-  ["agent", "Companion"],
-  ["bin", "Bin"],
+const TABS: [string, string, LucideIcon][] = [
+  ["board", "Board", Columns3],
+  ["docs", "Docs", FileText],
+  ["memory", "Memory", Brain],
+  ["commits", "Commits", GitCommitHorizontal],
+  ["plugins", "Plugins & usage", Gauge],
+  ["agent", "Companion", Bot],
+  ["bin", "Bin", Trash2],
 ];
 
 export function Project({ projectId, tab: urlTab, evt }: { projectId: string; tab?: string; evt: AppEvent }) {
@@ -146,14 +156,15 @@ export function Project({ projectId, tab: urlTab, evt }: { projectId: string; ta
           stuck ? "border-b border-zinc-800 bg-zinc-950/80 backdrop-blur" : ""
         }`}
       >
-        {TABS.map(([key, label]) => (
+        {TABS.map(([key, label, Icon]) => (
           <a
             key={key}
             href={`#/project/${projectId}/${key}`}
-            class={`cursor-pointer border-b-2 px-4 py-2 ${
+            class={`inline-flex cursor-pointer items-center gap-1.5 border-b-2 px-4 py-2 ${
               tab === key ? "border-violet-500 text-zinc-100" : "border-transparent text-zinc-400 hover:text-zinc-200"
             }`}
           >
+            <Icon size={15} class="shrink-0" />
             {label}
           </a>
         ))}

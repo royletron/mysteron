@@ -72,7 +72,10 @@ function AppShell() {
     <div class="flex min-h-[100dvh] flex-col">
       <header class="sticky top-0 z-10 flex items-center gap-2 border-b border-zinc-800 bg-zinc-950/80 px-6 py-3 backdrop-blur">
         <a href="#/" class="flex items-center gap-2">
-          <img src={logoUrl} alt="" width={26} height={26} class="shrink-0" />
+          <span class="relative inline-flex h-[26px] w-[26px] shrink-0 items-center justify-center">
+            <span class="logo-glow" aria-hidden="true" />
+            <img src={logoUrl} alt="" width={26} height={26} class="relative shrink-0" />
+          </span>
           <span class="font-display text-xl font-bold tracking-tight">Mysteron</span>
         </a>
         {route.name === "home" ? (
