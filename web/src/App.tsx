@@ -4,8 +4,8 @@ import { api, type ProjectListItem } from "./api";
 import { Home } from "./Home";
 import { Project } from "./Project";
 import { TicketPage } from "./TicketPage";
-import { Avatar } from "./Avatar";
 import { LiveDot } from "./ui";
+import logoUrl from "../images/m.png";
 
 export interface AppEvent {
   seq: number;
@@ -35,7 +35,7 @@ export function App() {
     <div class="flex min-h-[100dvh] flex-col">
       <header class="sticky top-0 z-10 flex items-center gap-2 border-b border-zinc-800 bg-zinc-950/80 px-6 py-3 backdrop-blur">
         <a href="#/" class="flex items-center gap-2">
-          <Avatar seed="Mysteron" variant="marble" size={26} />
+          <img src={logoUrl} alt="" width={26} height={26} class="shrink-0" />
           <span class="font-display text-xl font-bold tracking-tight">Mysteron</span>
         </a>
         {route.name === "home" ? (
