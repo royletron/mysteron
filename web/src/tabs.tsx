@@ -381,6 +381,11 @@ export function PluginsTab({ detail }: { detail: ProjectDetail }) {
                 <p class="mt-1 text-sm text-zinc-400">
                   Real limits from Claude · captured {fmtWhen(u.live.capturedAt)}
                 </p>
+                {u.live.lockout && (
+                  <p class="mt-1 text-xs text-red-400">
+                    ⛔ Limit reached — holding this reading until it resets{u.live.stale ? " (no newer data yet)" : ""}.
+                  </p>
+                )}
                 <UsageBar label="Session (5h)" bucket={u.live.session} margin={u.safetyMarginPercent} />
                 <UsageBar label="Weekly (7d)" bucket={u.live.weekly} margin={u.safetyMarginPercent} />
                 <div class="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">

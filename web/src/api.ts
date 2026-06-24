@@ -149,6 +149,10 @@ export interface UsageBudget {
     overallStatus?: string;
     session?: UsageBucket;
     weekly?: UsageBucket;
+    /** A lockout reading held past the freshness TTL until its reset passes. */
+    lockout?: boolean;
+    /** The capture is older than the freshness TTL (held only because of a lockout). */
+    stale?: boolean;
   } | null;
   windowHours?: number;
   resetAt?: string;

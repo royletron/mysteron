@@ -15,6 +15,14 @@ export type RunStatus = "running" | "done" | "failed" | "stopped";
 
 const MAX_LINES = 5000;
 
+/**
+ * Phrases Claude (Code/API) emits when a usage/spend/rate limit is hit. Anchored
+ * to clear "limit reached / hit your … limit" wording so ordinary mentions of
+ * "spend limit" in a ticket's own output don't trip it.
+ */
+const LIMIT_HIT_RE =
+  /(?:you'?ve\s+)?hit your (?:usage|spend|rate) limit|(?:usage|spend|rate) limit reached|reached your (?:usage|spend|rate) limit|credit balance is too low/i;
+
 export interface Run {
   id: string;
   projectId: string;
@@ -38,6 +46,8 @@ export interface Run {
   numTurns?: number;
   /** Whether the verbose log is available on this machine (logs are local-only). */
   logAvailable: boolean;
+  /** Set when the agent reported hitting a usage/spend/rate limit (see LIMIT_HIT_RE). */
+  limitHit?: boolean;
   lines: RunLine[];
 }
 
@@ -557,6 +567,7 @@ export class RunManager {
   }
 
   private append(run: Run, stream: RunLine["stream"], text: string): void {
+    if (!run.limitHit && LIMIT_HIT_RE.test(text)) run.limitHit = true;
     const line: RunLine = { stream, text, at: new Date().toISOString() };
     run.lines.push(line);
     if (run.lines.length > MAX_LINES) run.lines.splice(0, run.lines.length - MAX_LINES);
@@ -602,6 +613,20 @@ export class RunManager {
     run.endedAt = new Date().toISOString();
     this.procs.delete(run.id);
     this.lastPersist.delete(run.id);
+
+    // The agent hit a usage/spend/rate limit — it didn't finish, so put the
+    // ticket back on Ready to be retried once the limit resets.
+    if (run.limitHit && run.ticketId) {
+      this.append(
+        run,
+        "system",
+        "⚠ Claude usage/spend limit reached — moving the ticket back to Ready to retry after reset.",
+      );
+      void updateTicket(run.projectRoot, run.ticketId, { state: "ready" })
+        .then(() => bus.emitEvent({ type: "board-changed", projectId: run.projectId, detail: run.ticketId }))
+        .catch(() => undefined);
+    }
+
     void this.persist(run); // final record with the complete output
     const waiters = this.waiters.get(run.id);
     if (waiters) {

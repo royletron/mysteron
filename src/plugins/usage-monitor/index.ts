@@ -44,6 +44,24 @@ function isRejected(b?: Bucket): boolean {
   return b?.status === "rejected";
 }
 
+function bucketLockedOut(b: Bucket | undefined, nowMs: number): boolean {
+  return Boolean(b?.status === "rejected" && b.resetAt && Date.parse(b.resetAt) > nowMs);
+}
+
+/**
+ * Is the snapshot reporting an active lockout — a bucket rejected with a reset
+ * still in the future? Such a reading stays authoritative past the freshness TTL
+ * (a maxed-out state doesn't "expire" just because we haven't polled lately): we
+ * keep honouring it until a newer capture changes it or its reset time passes.
+ */
+function isLockedOut(u: { status?: string; session?: Bucket; weekly?: Bucket }, nowMs: number): boolean {
+  if (bucketLockedOut(u.session, nowMs) || bucketLockedOut(u.weekly, nowMs)) return true;
+  if (u.status === "rejected") {
+    return [u.session?.resetAt, u.weekly?.resetAt].some((r) => r != null && Date.parse(r) > nowMs);
+  }
+  return false;
+}
+
 /**
  * Usage monitor: keeps the companion inside Claude Code's limits, so a board can
  * be left churning over hours/days (and in yolo mode) without blowing the
@@ -90,11 +108,15 @@ export const usageMonitorPlugin: Plugin = {
             ? new Date(Date.parse(usage.oldestMessageAt) + wh * 3600_000).toISOString()
             : undefined;
 
-          // Is there a fresh live capture?
+          // Is there a usable live capture? Normally it must be fresh (within the
+          // TTL), but a reported lockout (rejected with a future reset) is held
+          // until it expires or newer data replaces it — see isLockedOut.
+          const now = Date.now();
           const snap = await readSnapshot();
-          const ageMs = snap ? Date.now() - Date.parse(snap.capturedAt) : Infinity;
+          const ageMs = snap ? now - Date.parse(snap.capturedAt) : Infinity;
           const fresh = Number.isFinite(ageMs) && ageMs <= liveTtlMs();
-          const unified = fresh ? snap?.unified : undefined;
+          const lockedOut = !!snap?.unified && isLockedOut(snap.unified, now);
+          const unified = fresh || lockedOut ? snap?.unified : undefined;
           const hasLive = Boolean(unified && (unified.session || unified.weekly));
 
           const account: AccountInfo = await detectAccount(hasLive);
@@ -161,6 +183,10 @@ export const usageMonitorPlugin: Plugin = {
                 overallStatus: unified.status,
                 session,
                 weekly,
+                // True when this reading is a lockout we're holding past the
+                // freshness TTL (until its reset passes or newer data arrives).
+                lockout: lockedOut,
+                stale: !fresh,
               },
               // Top-level compat fields (autopilot + existing UI read these).
               percentUsed: Number(pct.toFixed(1)),
