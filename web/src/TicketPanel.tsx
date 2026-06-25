@@ -226,7 +226,12 @@ function Dependencies({
   const byId = new Map(allTickets.map((t) => [t.id, t]));
   // Candidates: every other ticket not already a dependency. Excluding self keeps
   // a ticket from blocking itself; the server treats a missing id as satisfied.
-  const candidates = allTickets.filter((t) => t.id !== ticket?.id && !blockedBy.includes(t.id));
+  // Done and binned tickets aren't offered — there's no point waiting on work
+  // that's finished or discarded. Existing dependencies still show above even if
+  // they've since landed in the bin.
+  const candidates = allTickets.filter(
+    (t) => t.id !== ticket?.id && !blockedBy.includes(t.id) && t.state !== "done" && t.state !== "bin",
+  );
   const blocks = ticket?.blocks ?? [];
 
   const add = (id: string) => {
