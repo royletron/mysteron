@@ -13,7 +13,7 @@ import {
   type TicketState,
 } from "./api";
 import { useAsync } from "./hooks";
-import { LiveDot, RunTimer, CloudGlyph } from "./ui";
+import { LiveDot, RunTimer, CloudGlyph, RunMachine } from "./ui";
 import type { AppEvent } from "./App";
 
 function agentViewUrl(projectId: string, ticketId: string, run = false): string {
@@ -292,29 +292,28 @@ function AgentHistory({ projectId, ticketId, evt }: { projectId: string; ticketI
         key={r.id}
         href={agentViewUrl(projectId, ticketId)}
         title={r.command}
-        class="flex items-center justify-between gap-2 rounded-sm border border-zinc-800 px-2.5 py-1.5 text-xs text-zinc-400 hover:border-violet-500"
+        class="flex flex-col gap-1 rounded-sm border border-zinc-800 px-2.5 py-1.5 text-xs text-zinc-400 hover:border-violet-500"
       >
-        <span class={`inline-flex items-center gap-1.5 ${s?.color}`}>
-          {s?.live && <LiveDot />}
-          {s?.label || r.status}
+        <span class="flex items-center justify-between gap-2">
+          <span class={`inline-flex items-center gap-1.5 ${s?.color}`}>
+            {s?.live && <LiveDot />}
+            {s?.label || r.status}
+          </span>
+          <span class="flex items-center gap-2 text-zinc-500">
+            <span>{r.companion}</span>
+            <span>·</span>
+            <span>{fmtWhen(r.startedAt)}</span>
+            <RunTimer run={r} prefix="· " />
+            {r.costUsd != null && <span title={r.numTurns != null ? `${r.numTurns} turns` : undefined}>· {fmtCost(r.costUsd)}</span>}
+            {r.branch && (
+              <span class="inline-flex items-center gap-1 text-violet-300" title={`Work committed to branch ${r.branch} — git merge ${r.branch}`}>
+                ⎇ {r.branch}
+              </span>
+            )}
+          </span>
         </span>
-        <span class="flex items-center gap-2 text-zinc-500">
-          <span>{r.companion}</span>
-          {r.guestLabel && (
-            <span class="inline-flex items-center gap-1 text-sky-400" title={`Ran on guest machine “${r.guestLabel}”`}>
-              <CloudGlyph size={11} /> {r.guestLabel}
-            </span>
-          )}
-          <span>·</span>
-          <span>{fmtWhen(r.startedAt)}</span>
-          <RunTimer run={r} prefix="· " />
-          {r.costUsd != null && <span title={r.numTurns != null ? `${r.numTurns} turns` : undefined}>· {fmtCost(r.costUsd)}</span>}
-          {r.branch && (
-            <span class="inline-flex items-center gap-1 text-violet-300" title={`Work committed to branch ${r.branch} — git merge ${r.branch}`}>
-              ⎇ {r.branch}
-            </span>
-          )}
-          {r.logAvailable === false && <span title={`Ran on ${r.hostname}; logs are local to that machine`}>🖥 {r.hostname}</span>}
+        <span class="flex justify-end">
+          <RunMachine run={r} />
         </span>
       </a>
     );
