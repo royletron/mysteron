@@ -108,6 +108,39 @@ test("renderStreamEvent turns Claude stream-json into readable lines", () => {
   assert.deepEqual(renderStreamEvent(null), []);
 });
 
+test("renderStreamEvent strips the project root from logged paths", () => {
+  const root = "/home/me/projects/widget";
+
+  // Tool call arg: the absolute project path is reduced to a repo-relative one.
+  const call = renderStreamEvent(
+    {
+      type: "assistant",
+      message: { content: [{ type: "tool_use", name: "Read", input: { file_path: `${root}/src/file.ts` } }] },
+    },
+    root,
+  );
+  assert.equal(call[0].text, "→ Read /src/file.ts");
+
+  // Tool result: paths in the output are stripped too.
+  const result = renderStreamEvent(
+    {
+      type: "user",
+      message: { content: [{ type: "tool_result", content: `edited ${root}/src/file.ts` }] },
+    },
+    root,
+  );
+  assert.match(result[0].text, /← edited \/src\/file\.ts/);
+
+  // No project root supplied → text is left untouched.
+  const untouched = renderStreamEvent(
+    {
+      type: "assistant",
+      message: { content: [{ type: "tool_use", name: "Read", input: { file_path: `${root}/src/file.ts` } }] },
+    },
+  );
+  assert.equal(untouched[0].text, `→ Read ${root}/src/file.ts`);
+});
+
 test("resolveCommand maps yolo + allowed/disallowed tools to claude flags", () => {
   const saved = process.env.MYSTERON_AGENT_CMD;
   delete process.env.MYSTERON_AGENT_CMD; // force the default claude path
