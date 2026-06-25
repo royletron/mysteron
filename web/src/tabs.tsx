@@ -20,6 +20,7 @@ import { Markdown } from "./Markdown";
 import { CodeEditor } from "./CodeEditor";
 import { Avatar } from "./Avatar";
 import { LiveDot, Modal, RunTimer } from "./ui";
+import { pushToast } from "./Toast";
 
 type DocMode = "preview" | "split" | "edit";
 
@@ -673,20 +674,33 @@ export function BranchesTab({ detail }: { detail: ProjectDetail }) {
   const [busy, setBusy] = useState("");
   const branches = data?.branches ?? [];
 
-  const act = async (path: string, branch: string) => {
+  const act = async <T,>(path: string, branch: string): Promise<T | undefined> => {
     setBusy(branch);
     try {
-      await api(`/api/projects/${projectId}/branches/${path}`, { method: "POST", body: JSON.stringify({ branch }) });
+      const res = await api<T>(`/api/projects/${projectId}/branches/${path}`, {
+        method: "POST",
+        body: JSON.stringify({ branch }),
+      });
       reload();
+      return res;
     } catch (e) {
       alert((e as Error).message);
     } finally {
       setBusy("");
     }
   };
-  const merge = (b: BranchInfo) => act("merge", b.name);
+  const merge = async (b: BranchInfo) => {
+    const res = await act<{ ok: boolean; boardCommitted?: boolean }>("merge", b.name);
+    if (res?.ok) {
+      pushToast(`Merged ${b.name} — delete it below when you're done.`, "success");
+      if (res.boardCommitted) pushToast("Committed pending board changes first.", "info");
+    }
+  };
   const drop = (b: BranchInfo) => {
-    if (confirm(`Delete branch ${b.name}? Its commits are discarded if they aren't merged.`)) act("delete", b.name);
+    const warning = b.merged
+      ? `Delete branch ${b.name}? It's already merged, so nothing is lost.`
+      : `Delete branch ${b.name}? Its commits are discarded if they aren't merged.`;
+    if (confirm(warning)) act("delete", b.name);
   };
 
   return (
@@ -694,7 +708,8 @@ export function BranchesTab({ detail }: { detail: ProjectDetail }) {
       <h2 class="text-lg font-semibold">Open branches</h2>
       <p class="text-sm text-zinc-400">
         Work that landed on its own branch — guest runs under a new-branch recipe, or when the host's tree was busy.
-        Merge one into <code>{data?.current || "the current branch"}</code> when you're happy with it.
+        Merge one into <code>{data?.current || "the current branch"}</code> when you're happy with it; pending board
+        changes are committed automatically. Merged branches are flagged so you can delete them here.
       </p>
       {loading && !data ? (
         <div class="pulse mt-2 text-sm text-zinc-500">Loading…</div>
@@ -717,6 +732,11 @@ export function BranchesTab({ detail }: { detail: ProjectDetail }) {
                     {b.name}
                   </code>
                   <span class="shrink-0 text-xs text-zinc-500">{b.shortHash}</span>
+                  {b.merged && (
+                    <span class="shrink-0 rounded-full bg-emerald-900/60 px-2 py-0.5 text-xs font-medium text-emerald-300">
+                      Merged
+                    </span>
+                  )}
                 </div>
                 <div class="truncate text-xs text-zinc-400" title={b.subject}>
                   {b.subject}
@@ -732,13 +752,15 @@ export function BranchesTab({ detail }: { detail: ProjectDetail }) {
                   </span>
                 </div>
               </div>
-              <button class="btn btn-primary btn-sm shrink-0" disabled={busy === b.name} onClick={() => merge(b)}>
-                {busy === b.name ? "…" : "Merge"}
-              </button>
+              {!b.merged && (
+                <button class="btn btn-primary btn-sm shrink-0" disabled={busy === b.name} onClick={() => merge(b)}>
+                  {busy === b.name ? "…" : "Merge"}
+                </button>
+              )}
               <button
                 class="btn btn-danger btn-sm shrink-0"
                 disabled={busy === b.name}
-                title="Delete branch"
+                title={b.merged ? "Delete merged branch" : "Delete branch"}
                 onClick={() => drop(b)}
               >
                 ✕

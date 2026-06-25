@@ -7,7 +7,7 @@ import { promisify } from "node:util";
 import { after, test } from "node:test";
 
 const exec = promisify(execFile);
-const { captureSnapshotRef, releaseSnapshotRef, landGuestPatch, listBranches, mergeBranch, deleteBranch } =
+const { captureSnapshotRef, releaseSnapshotRef, landGuestPatch, listBranches, mergeBranch, deleteBranch, commitBoardChanges } =
   await import("../src/core/git.js");
 
 const roots: string[] = [];
@@ -143,12 +143,14 @@ test("listBranches / mergeBranch / deleteBranch round-trip", async () => {
   assert.equal(branches[0].ahead, 1);
   assert.equal(branches[0].behind, 0);
   assert.equal(branches[0].filesChanged, 1);
+  assert.equal(branches[0].merged, false);
 
   const merged = await mergeBranch(root, "mysteron/t1");
   assert.equal(merged.ok, true);
   assert.equal(await read(root, "feature.txt"), "feature\n"); // landed on the current branch
 
   assert.equal((await listBranches(root))[0].ahead, 0); // now fully merged
+  assert.equal((await listBranches(root))[0].merged, true); // and flagged as such for the UI
 
   assert.equal((await deleteBranch(root, "mysteron/t1")).ok, true);
   assert.equal((await listBranches(root)).length, 0);
@@ -161,6 +163,55 @@ test("mergeBranch refuses a dirty working tree", async () => {
   const res = await mergeBranch(root, "mysteron/t2");
   assert.equal(res.ok, false);
   assert.match(res.error ?? "", /uncommitted/);
+});
+
+test("mergeBranch auto-commits .mysteron board changes then merges", async () => {
+  const root = await makeRepo();
+  await fs.mkdir(path.join(root, ".mysteron", "board"), { recursive: true });
+  await fs.writeFile(path.join(root, ".mysteron", "board", "t1.md"), "ticket\n");
+  await git(root, "add", "-A");
+  await git(root, "commit", "-q", "-m", "seed board");
+  await commitOnBranch(root, "mysteron/t9", "feature.txt", "feature\n", "Add feature");
+
+  // The app left the board dirty: an edited ticket and a brand-new untracked one.
+  await fs.writeFile(path.join(root, ".mysteron", "board", "t1.md"), "ticket edited\n");
+  await fs.writeFile(path.join(root, ".mysteron", "board", "t2.md"), "new ticket\n");
+
+  const res = await mergeBranch(root, "mysteron/t9");
+  assert.equal(res.ok, true);
+  assert.equal(res.boardCommitted, true);
+  assert.equal((await git(root, "status", "--porcelain")).stdout.trim(), ""); // tree is clean
+  assert.equal(await read(root, "feature.txt"), "feature\n"); // branch merged
+  assert.equal(await read(root, ".mysteron/board/t2.md"), "new ticket\n"); // new ticket committed
+});
+
+test("mergeBranch still refuses when non-board changes are dirty", async () => {
+  const root = await makeRepo();
+  await fs.mkdir(path.join(root, ".mysteron", "board"), { recursive: true });
+  await commitOnBranch(root, "mysteron/t10", "f.txt", "x\n", "m");
+  await fs.writeFile(path.join(root, ".mysteron", "board", "t1.md"), "ticket\n"); // board change (ok)
+  await fs.writeFile(path.join(root, "a.txt"), "real local edit\n"); // user's own work (not ok)
+
+  const res = await mergeBranch(root, "mysteron/t10");
+  assert.equal(res.ok, false);
+  assert.match(res.error ?? "", /uncommitted/);
+  assert.equal(await read(root, "a.txt"), "real local edit\n"); // untouched, nothing committed
+});
+
+test("commitBoardChanges leaves a user's staged work alone", async () => {
+  const root = await makeRepo();
+  await fs.mkdir(path.join(root, ".mysteron", "board"), { recursive: true });
+  await fs.writeFile(path.join(root, ".mysteron", "board", "t1.md"), "ticket\n");
+  await fs.writeFile(path.join(root, "a.txt"), "staged work\n");
+  await git(root, "add", "a.txt"); // user staged their own change
+
+  const res = await commitBoardChanges(root, { trailer: "Mysteron-Companion: Onyx" });
+  assert.equal(res.committed, true);
+  assert.equal((await git(root, "log", "-1", "--pretty=%b")).stdout.trim(), "Mysteron-Companion: Onyx");
+  assert.equal((await git(root, "diff", "--cached", "--name-only")).stdout.trim(), "a.txt"); // still staged
+  assert.equal((await git(root, "show", "HEAD:a.txt")).stdout, "hello\n"); // staged change not committed
+
+  assert.equal((await commitBoardChanges(root)).committed, false); // nothing left to commit
 });
 
 test("mergeBranch reports conflicts and aborts cleanly", async () => {

@@ -226,6 +226,8 @@ export interface BranchInfo {
   behind: number;
   /** Files this branch changes relative to its merge-base with the current branch. */
   filesChanged: number;
+  /** Fully merged into the checked-out branch (its tip is an ancestor) — safe to delete. */
+  merged: boolean;
 }
 
 /** A branch name safe to pass to git as an argument (no leading dash, no spaces/control, no `..`). */
@@ -277,36 +279,110 @@ export async function listBranches(root: string): Promise<BranchInfo[]> {
           .then(({ stdout }) => stdout.split("\n").filter(Boolean).length)
           .catch(() => 0);
       }
-      return { name, shortHash, date, subject, companion: companion?.trim() || undefined, ahead, behind, filesChanged };
+      return { name, shortHash, date, subject, companion: companion?.trim() || undefined, ahead, behind, filesChanged, merged: !!current && ahead === 0 };
     }),
   );
+}
+
+/** Everything under the `.mysteron/` board lives in-tree but the app writes it without committing. */
+const MYSTERON_DIR = ".mysteron/";
+const isBoardPath = (p: string) => p === ".mysteron" || p.startsWith(MYSTERON_DIR);
+
+/** A path touched in `git status --porcelain`, tagged tracked vs. untracked (`??`). */
+interface StatusEntry {
+  path: string;
+  untracked: boolean;
+}
+
+/** Parse `git status --porcelain` (handles untracked `??` and rename `old -> new`). */
+function statusEntries(porcelain: string): StatusEntry[] {
+  return porcelain
+    .split("\n")
+    .map((l) => l.replace(/\r$/, ""))
+    .filter((l) => l.length > 3)
+    .flatMap((l) => {
+      const untracked = l.startsWith("??");
+      const rest = l.slice(3);
+      const arrow = rest.indexOf(" -> ");
+      const paths = arrow >= 0 ? [rest.slice(0, arrow), rest.slice(arrow + 4)] : [rest];
+      return paths.map((p) => ({ path: p.replace(/^"(.*)"$/, "$1"), untracked }));
+    });
+}
+
+/**
+ * Stage and commit any pending changes under `.mysteron/` (new tickets and ticket
+ * edits the app writes in-tree but never commits). Scoped to `.mysteron/` via a
+ * pathspec commit, so a user's own staged work is left exactly as it was. Returns
+ * `committed: false` when there was nothing to commit.
+ */
+export async function commitBoardChanges(
+  root: string,
+  opts?: { trailer?: string },
+): Promise<{ ok: boolean; committed: boolean; commit?: string; error?: string }> {
+  const git = (args: string[]) => exec("git", ["-C", root, ...args], { maxBuffer: 64 << 20 });
+  try {
+    await git(["add", "-A", "--", ".mysteron"]);
+    const staged = (await git(["diff", "--cached", "--name-only", "--", ".mysteron"])).stdout.trim();
+    if (!staged) return { ok: true, committed: false };
+    const message = "chore: commit board changes";
+    const msg = opts?.trailer ? `${message}\n\n${opts.trailer}` : message;
+    await git(["-c", "user.name=Mysteron", "-c", "user.email=mysteron@local", "commit", "-q", "-m", msg, "--", ".mysteron"]);
+    const commit = (await git(["rev-parse", "HEAD"])).stdout.trim();
+    return { ok: true, committed: true, commit };
+  } catch (e) {
+    return { ok: false, committed: false, error: (e as Error).message };
+  }
 }
 
 export interface MergeResult {
   ok: boolean;
   /** The merge hit conflicts and was aborted — the working tree is left untouched. */
   conflicted?: boolean;
+  /** Pending `.mysteron/` board changes were auto-committed before the merge. */
+  boardCommitted?: boolean;
   error?: string;
 }
 
 /**
  * Merge a branch into the checked-out branch (no-ff, so the branch reads as a unit
- * of work). Refuses on a dirty tree and aborts cleanly on conflict, rather than
- * leaving the tree half-merged.
+ * of work). Aborts cleanly on conflict rather than leaving the tree half-merged.
+ *
+ * The board (`.mysteron/`) lives in-tree but the app writes tickets without
+ * committing, so the tree is almost always "dirty" with board-only changes that
+ * would otherwise block (or collide with) the merge. By default those are
+ * auto-committed first; any *non*-board change still refuses, so the user's own
+ * work is never swept into a commit behind their back.
  */
-export async function mergeBranch(root: string, branch: string): Promise<MergeResult> {
+export async function mergeBranch(
+  root: string,
+  branch: string,
+  opts?: { autoCommitBoard?: boolean; trailer?: string },
+): Promise<MergeResult> {
   if (!isValidBranchName(branch)) return { ok: false, error: "invalid branch name" };
   const git = (args: string[]) => exec("git", ["-C", root, ...args], { maxBuffer: 64 << 20 });
-  const dirty = await git(["status", "--porcelain", "--untracked-files=no"])
-    .then(({ stdout }) => stdout.trim().length > 0)
-    .catch(() => false);
-  if (dirty) return { ok: false, error: "working tree has uncommitted changes — commit or stash them first" };
+  let boardCommitted = false;
+  const entries = await git(["status", "--porcelain"])
+    .then(({ stdout }) => statusEntries(stdout))
+    .catch(() => [] as StatusEntry[]);
+  // Tracked edits to the user's own files block — never sweep their work into a commit.
+  // (Untracked non-board files are left for git's merge to handle, as before.)
+  if (entries.some((e) => !e.untracked && !isBoardPath(e.path))) {
+    return { ok: false, error: "working tree has uncommitted changes — commit or stash them first" };
+  }
+  if (entries.some((e) => isBoardPath(e.path))) {
+    if (opts?.autoCommitBoard === false) {
+      return { ok: false, error: "uncommitted board changes — commit them first" };
+    }
+    const res = await commitBoardChanges(root, { trailer: opts?.trailer });
+    if (!res.ok) return { ok: false, error: `couldn't auto-commit board changes: ${res.error}` };
+    boardCommitted = res.committed;
+  }
   try {
     await git(["-c", "user.name=Mysteron", "-c", "user.email=mysteron@local", "merge", "--no-ff", "-m", `Merge ${branch}`, branch]);
-    return { ok: true };
+    return { ok: true, boardCommitted };
   } catch {
     await git(["merge", "--abort"]).catch(() => undefined);
-    return { ok: false, conflicted: true, error: `conflicts merging ${branch} — resolve locally with \`git merge ${branch}\`` };
+    return { ok: false, conflicted: true, boardCommitted, error: `conflicts merging ${branch} — resolve locally with \`git merge ${branch}\`` };
   }
 }
 

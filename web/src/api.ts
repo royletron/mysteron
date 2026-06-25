@@ -200,6 +200,7 @@ export interface BranchInfo {
   ahead: number;
   behind: number;
   filesChanged: number;
+  merged: boolean;
 }
 
 export interface Recipe {
