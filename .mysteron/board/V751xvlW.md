@@ -1,15 +1,15 @@
 ---
 title: Clicking Run
-state: review
+state: done
 priority: medium
 companionId: c1bf55fe-3e93-410d-94a7-cfde4dc1f80e
 assignee: Waldorf the Compiler
 labels: []
 created: '2026-06-25T17:28:55.204Z'
-updated: '2026-06-25T17:44:30.873Z'
+updated: '2026-06-25T17:54:17.238Z'
 blockedBy:
   - ovhBZnIa
-order: 2
+order: 0
 ---
 
 We tried to fix this a few commits back, but I still have this problem where clicking 'run' on a ticket when everything is busy - it doesn't give me any feedback?

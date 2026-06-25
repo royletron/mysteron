@@ -1,12 +1,12 @@
 ---
 title: Cloud Companions
-state: review
+state: done
 priority: medium
 companionId: c1bf55fe-3e93-410d-94a7-cfde4dc1f80e
 assignee: Waldorf the Compiler
 labels: []
 created: '2026-06-25T17:17:16.961Z'
-updated: '2026-06-25T17:27:31.104Z'
+updated: '2026-06-25T17:54:23.841Z'
 ---
 
 Whenever I use a guest to run a ticket, they don't seem to follow the instructions from the companion role? Particularly seeing it for commit messages...? But maybe that's not being done by the agent?

@@ -1,12 +1,12 @@
 ---
 title: Branch Merging
-state: review
+state: done
 priority: medium
 companionId: c1bf55fe-3e93-410d-94a7-cfde4dc1f80e
 assignee: Waldorf the Compiler
 labels: []
 created: '2026-06-25T16:50:25.169Z'
-updated: '2026-06-25T16:58:10.314Z'
+updated: '2026-06-25T17:54:23.819Z'
 ---
 
 This is getting a little complicated, but it seems really hard to merge branch changes. Mainly because we don't commit new tickets/ticket changes - so they tend to sit as uncomitted changes and then the merge fails. Could we do a check locally to see if it's just `.mysteron` changes and automatically commit them? Then run the branch merge? We also need to delete the branch after successful merge - or follow githubs lead and show whether the branch is merged, and allow deletion in the UI at that point?

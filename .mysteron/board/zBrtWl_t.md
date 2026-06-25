@@ -1,12 +1,12 @@
 ---
 title: Connected Guests
-state: review
+state: done
 priority: medium
 companionId: c1bf55fe-3e93-410d-94a7-cfde4dc1f80e
 assignee: Waldorf the Compiler
 labels: []
 created: '2026-06-25T16:45:57.792Z'
-updated: '2026-06-25T16:51:29.555Z'
+updated: '2026-06-25T17:54:23.812Z'
 ---
 
 The popover appeared behind the add ticket and auto pilot buttons.

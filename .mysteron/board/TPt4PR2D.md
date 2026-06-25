@@ -1,12 +1,12 @@
 ---
 title: Reorder Lists
-state: review
+state: done
 priority: medium
 companionId: c1bf55fe-3e93-410d-94a7-cfde4dc1f80e
 assignee: Waldorf the Compiler
 labels: []
 created: '2026-06-25T17:30:43.621Z'
-updated: '2026-06-25T17:37:28.036Z'
+updated: '2026-06-25T17:54:23.847Z'
 ---
 
 Presumably we pop off the 'top' card from the list when on autopilot - the problem is I can't change the order of that list? Can we make that happen and have it drag and droppy?

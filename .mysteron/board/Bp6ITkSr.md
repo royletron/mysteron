@@ -6,7 +6,8 @@ companionId: c1bf55fe-3e93-410d-94a7-cfde4dc1f80e
 assignee: Waldorf the Compiler
 labels: []
 created: '2026-06-25T16:25:19.045Z'
-updated: '2026-06-25T16:45:29.818Z'
+updated: '2026-06-25T17:54:17.268Z'
+order: 3
 ---
 
 In the agent history list on a ticket. If the agent run is done an a remote machine, could we have an addtional row within the line? It's too wide to fit when we have the remote machine information in? You could also make it so that things that run on the host machine do the same but with 'host' or something more interesting in there? Maybe the hostname of the machine a home icon? Same in the 'Run History' area

@@ -6,7 +6,8 @@ companionId: c1bf55fe-3e93-410d-94a7-cfde4dc1f80e
 assignee: Waldorf the Compiler
 labels: []
 created: '2026-06-25T16:27:13.267Z'
-updated: '2026-06-25T16:45:29.823Z'
+updated: '2026-06-25T17:54:17.278Z'
+order: 4
 ---
 
 When I click run and nothing is available to run the ticket, can we make that obvious? At the moment it just silently fails.

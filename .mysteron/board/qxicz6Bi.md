@@ -1,12 +1,12 @@
 ---
 title: Dependency Logic
-state: review
+state: done
 priority: medium
 companionId: c1bf55fe-3e93-410d-94a7-cfde4dc1f80e
 assignee: Waldorf the Compiler
 labels: []
 created: '2026-06-25T17:02:25.479Z'
-updated: '2026-06-25T17:13:02.012Z'
+updated: '2026-06-25T17:54:23.827Z'
 ---
 
 We need to optionally allow tickets to be dependant on one another. This should pause them in the queue until their dependent tickets are both complete, and merged (if branched) - we basically need to know they are in main.
