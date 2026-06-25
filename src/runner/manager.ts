@@ -234,20 +234,27 @@ function truncate(s: string, n: number): string {
   return s.length > n ? s.slice(0, n) + "…" : s;
 }
 
-function summarizeToolInput(input: unknown): string {
+/** Strip the absolute project root from logged text so paths read as
+ *  repo-relative (/path/to/project/src/x.ts → /src/x.ts). Split/join avoids
+ *  regex-escaping the path's special characters. */
+function stripProjectPath(s: string, projectRoot?: string): string {
+  return projectRoot ? s.split(projectRoot).join("") : s;
+}
+
+function summarizeToolInput(input: unknown, projectRoot?: string): string {
   if (!input || typeof input !== "object") return "";
   const o = input as Record<string, unknown>;
   for (const key of ["command", "file_path", "path", "pattern", "url", "query", "description"]) {
-    if (typeof o[key] === "string") return truncate((o[key] as string).replace(/\s+/g, " "), 140);
+    if (typeof o[key] === "string") return stripProjectPath(truncate((o[key] as string).replace(/\s+/g, " "), 140), projectRoot);
   }
-  return truncate(JSON.stringify(o), 140);
+  return stripProjectPath(truncate(JSON.stringify(o), 140), projectRoot);
 }
 
 /**
  * Turn one Claude Code stream-json event into readable log line(s). Exported for
  * testing. Unknown shapes return [] so we never crash the run on a schema change.
  */
-export function renderStreamEvent(obj: unknown): RenderedLine[] {
+export function renderStreamEvent(obj: unknown, projectRoot?: string): RenderedLine[] {
   const out: RenderedLine[] = [];
   const push = (stream: "stdout" | "system", text: string) => {
     const t = text?.trimEnd?.();
@@ -263,7 +270,7 @@ export function renderStreamEvent(obj: unknown): RenderedLine[] {
     case "assistant":
       for (const b of e.message?.content ?? []) {
         if (b.type === "text") push("stdout", b.text);
-        else if (b.type === "tool_use") push("system", `→ ${b.name} ${summarizeToolInput(b.input)}`.trimEnd());
+        else if (b.type === "tool_use") push("system", `→ ${b.name} ${summarizeToolInput(b.input, projectRoot)}`.trimEnd());
       }
       break;
     case "user":
@@ -271,7 +278,7 @@ export function renderStreamEvent(obj: unknown): RenderedLine[] {
         if (b.type === "tool_result") {
           const c = b.content;
           const text = typeof c === "string" ? c : Array.isArray(c) ? c.map((x: any) => x?.text ?? "").join("") : "";
-          push("system", `  ← ${truncate(text.trim(), 1500)}`);
+          push("system", `  ← ${stripProjectPath(truncate(text.trim(), 1500), projectRoot)}`);
         }
       }
       break;
@@ -771,7 +778,7 @@ export class RunManager {
         const stats = runResultStats(obj);
         if (stats.costUsd != null) run.costUsd = stats.costUsd;
         if (stats.numTurns != null) run.numTurns = stats.numTurns;
-        for (const r of renderStreamEvent(obj)) this.append(run, r.stream, r.text);
+        for (const r of renderStreamEvent(obj, run.projectRoot)) this.append(run, r.stream, r.text);
       } else {
         this.append(run, kind, raw);
       }
