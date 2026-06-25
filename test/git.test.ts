@@ -183,14 +183,22 @@ test("invalid branch names are rejected (no git invocation)", async () => {
   assert.equal((await deleteBranch(root, "a b")).ok, false);
 });
 
-test("captureSnapshotRef pins working-tree state; releaseSnapshotRef drops it", async () => {
+test("captureSnapshotRef captures the full working tree (incl. untracked, excl. ignored)", async () => {
   const root = await makeRepo();
-  await fs.writeFile(path.join(root, "a.txt"), "uncommitted edit\n");
+  await fs.writeFile(path.join(root, "a.txt"), "uncommitted edit\n"); // modified tracked file
+  await fs.writeFile(path.join(root, "new.txt"), "brand new\n"); // untracked source the host hasn't added yet
+  await fs.writeFile(path.join(root, ".gitignore"), "ignored.txt\n");
+  await fs.writeFile(path.join(root, "ignored.txt"), "secret\n"); // git-ignored — must NOT leak to the guest
 
   const sha = await captureSnapshotRef(root, "r5");
-  assert.notEqual(sha, "HEAD"); // dirty tree → a real snapshot commit
+  assert.notEqual(sha, "HEAD");
   assert.equal((await git(root, "show", `${sha}:a.txt`)).stdout, "uncommitted edit\n");
+  assert.equal((await git(root, "show", `${sha}:new.txt`)).stdout, "brand new\n"); // untracked included
+  await assert.rejects(() => git(root, "show", `${sha}:ignored.txt`)); // ignored excluded
   assert.equal(await refExists(root, "refs/mysteron/snap/r5"), true);
+
+  // The host's real index/HEAD are untouched by the snapshot.
+  assert.equal((await git(root, "status", "--porcelain")).stdout.includes("new.txt"), true);
 
   await releaseSnapshotRef(root, "r5");
   assert.equal(await refExists(root, "refs/mysteron/snap/r5"), false);

@@ -24,21 +24,42 @@ export async function workingTreeRef(root: string): Promise<string> {
 const snapRef = (runId: string) => `refs/mysteron/snap/${runId}`;
 
 /**
- * Snapshot the host's working tree as a commit and pin it under a ref. The guest
- * diffs against this exact state (so the host serves it for the snapshot tar),
+ * Snapshot the host's *full* working tree as a commit and pin it under a ref. The
+ * guest diffs against this exact state (the host serves it as the snapshot tar)
  * and `git apply --3way` later needs its blobs present to merge — the ref keeps
- * them reachable until the result lands. Returns the commit SHA, or "HEAD" when
- * the tree is clean (nothing extra to pin).
+ * them reachable until the result lands.
+ *
+ * Unlike `git stash create` (tracked files only), this includes **untracked but
+ * not git-ignored** files, so a guest sees source the host hasn't committed yet
+ * rather than a tree with files missing. Built via a throwaway index so the
+ * host's real index/working tree are never touched. Returns the commit SHA, or
+ * "HEAD" if nothing could be captured.
  */
 export async function captureSnapshotRef(root: string, runId: string): Promise<string> {
+  const tmpIndex = path.join(os.tmpdir(), `mysteron-snap-index-${runId}`);
+  const env = {
+    ...process.env,
+    GIT_INDEX_FILE: tmpIndex,
+    GIT_AUTHOR_NAME: "Mysteron",
+    GIT_AUTHOR_EMAIL: "mysteron@local",
+    GIT_COMMITTER_NAME: "Mysteron",
+    GIT_COMMITTER_EMAIL: "mysteron@local",
+  };
+  const g = (args: string[]) => exec("git", ["-C", root, ...args], { env, maxBuffer: 256 << 20 });
   try {
-    const { stdout } = await exec("git", ["-C", root, "stash", "create"], { maxBuffer: 1 << 20 });
-    const sha = stdout.trim();
-    if (!sha) return "HEAD";
-    await exec("git", ["-C", root, "update-ref", snapRef(runId), sha]).catch(() => undefined);
-    return sha;
+    await g(["read-tree", "HEAD"]).catch(() => undefined); // seed from HEAD if it exists (captures deletions too)
+    await g(["add", "-A"]); // stage tracked + untracked, honouring .gitignore
+    const tree = (await g(["write-tree"])).stdout.trim();
+    const head = await g(["rev-parse", "--verify", "-q", "HEAD"]).then((r) => r.stdout.trim()).catch(() => "");
+    const commit = (await g(head ? ["commit-tree", tree, "-p", head, "-m", "mysteron snapshot"] : ["commit-tree", tree, "-m", "mysteron snapshot"])).stdout.trim();
+    if (!commit) return "HEAD";
+    await exec("git", ["-C", root, "update-ref", snapRef(runId), commit]).catch(() => undefined);
+    return commit;
   } catch {
-    return "HEAD";
+    // Fall back to tracked-only state rather than failing the dispatch entirely.
+    return workingTreeRef(root);
+  } finally {
+    await fs.rm(tmpIndex, { force: true }).catch(() => undefined);
   }
 }
 

@@ -298,13 +298,13 @@ public coordinator (owns the board + repo); **guests** dial in from anywhere
    the **▶ play** button on a ticket **auto-offloads** to an idle guest instead of
    running locally — if no guest is free it blocks with a clear message rather
    than burning a run against the rate limit.
-4. For each dispatched ticket: the host **pins a snapshot** of its working tree
-   (a `git archive` of tracked files, incl. uncommitted edits — no shared git
-   remote needed) and sends it with the composed prompt. The guest runs Claude
-   locally — pointed at the host's **live MCP over HTTP** (token-gated, scoped to
-   the run's project) so it sees the real board, not just the tracked files in its
-   snapshot — streams its output back to the host's live view, then returns a
-   `git diff` of the result.
+4. For each dispatched ticket: the host **pins a snapshot** of its full working
+   tree — tracked files (incl. uncommitted edits) **and untracked-but-not-ignored
+   files**, so the guest doesn't run against source the host hasn't committed yet;
+   no shared git remote needed — and sends it with the composed prompt. The guest
+   runs Claude locally — pointed at the host's **live MCP over HTTP** (token-gated,
+   scoped to the run's project) so it sees the real board too — streams its output
+   back to the host's live view, then returns a `git diff` of the result.
 5. The host **lands that patch the way a local run would** under the project's
    git strategy: **current-branch** recipes fast-forward the checked-out branch
    onto the guest's commit (so it lands in your working tree) when that tree is
