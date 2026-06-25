@@ -21,6 +21,7 @@ import { CodeEditor } from "./CodeEditor";
 import { Avatar } from "./Avatar";
 import { LiveDot, Modal, RunTimer } from "./ui";
 import { pushToast } from "./Toast";
+import logoUrl from "../images/m.png";
 
 type DocMode = "preview" | "split" | "edit";
 
@@ -634,7 +635,8 @@ export function CommitsTab({ detail }: { detail: ProjectDetail }) {
     <div class="card">
       <h2 class="text-lg font-semibold">Commits</h2>
       <p class="text-sm text-zinc-400">
-        Recent git history. Commits a companion made carry a <code>Mysteron-Companion</code> trailer and show their avatar.
+        Recent git history. Commits a companion made carry a <code>Mysteron-Companion</code> trailer and show their
+        avatar; commits Mysteron made itself show the Mysteron mark.
       </p>
       {loading && !data ? (
         <div class="pulse mt-2 text-sm text-zinc-500">Loading…</div>
@@ -646,6 +648,8 @@ export function CommitsTab({ detail }: { detail: ProjectDetail }) {
             <div key={commit.hash} class="flex items-center gap-3 border-b border-zinc-800/60 py-2 last:border-0">
               {commit.companionRef ? (
                 <Avatar companion={commit.companionRef} size={26} />
+              ) : commit.mysteron ? (
+                <img src={logoUrl} alt="Mysteron" width={26} height={26} class="shrink-0" />
               ) : (
                 <span class="inline-block h-[26px] w-[26px] shrink-0 rounded-full bg-zinc-800" />
               )}
