@@ -1,8 +1,6 @@
-import type { Server } from "node:http";
 import { WebSocketServer, type WebSocket } from "ws";
 import { bus, type AutopilotEvent, type MysteronEvent, type RunEvent } from "../core/events.js";
 import type { RunManager } from "../runner/manager.js";
-import { isAuthedByCookieHeader } from "./auth.js";
 
 /**
  * A single WebSocket per browser tab carries all live push data — global board/
@@ -18,19 +16,13 @@ import { isAuthedByCookieHeader } from "./auth.js";
  * Server → client messages:
  *   { channel: "global", evt }     a MysteronEvent or AutopilotEvent
  *   { channel: "run", evt }        a RunEvent (kind: line | status | started)
+ *
+ * Created in `noServer` mode and wired into a single `upgrade` router in
+ * index.ts (multiple path-scoped WebSocketServers on one HTTP server clobber
+ * each other's handshakes). Auth gating for /ws happens in that router.
  */
-export function setupWebSocket(server: Server, runs: RunManager, verbose = false): void {
-  // The live stream carries run output, so gate the upgrade behind the same
-  // cookie check as the REST API (no-op when protection is off).
-  const wss = new WebSocketServer({
-    server,
-    path: "/ws",
-    verifyClient: ({ req }, cb) => {
-      isAuthedByCookieHeader(req.headers.cookie)
-        .then((ok) => cb(ok, 401, "Unauthorized"))
-        .catch(() => cb(false, 500, "auth check failed"));
-    },
-  });
+export function setupWebSocket(runs: RunManager, verbose = false): WebSocketServer {
+  const wss = new WebSocketServer({ noServer: true });
 
   // Fan global events out to every connected socket.
   const onMysteron = (evt: MysteronEvent) => broadcast({ channel: "global", evt });
@@ -126,4 +118,6 @@ export function setupWebSocket(server: Server, runs: RunManager, verbose = false
     }
   }, 30_000);
   wss.on("close", () => clearInterval(heartbeat));
+
+  return wss;
 }

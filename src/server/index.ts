@@ -13,6 +13,7 @@ import { setupWebSocket } from "./ws.js";
 import { startRateLimitProxy, type RateLimitProxy } from "../plugins/usage-monitor/proxy.js";
 import { WorkerRegistry } from "./workers.js";
 import { GuestController } from "./guest-controller.js";
+import { isAuthedByCookieHeader } from "./auth.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -134,9 +135,30 @@ export async function serve(opts: ServeOptions = {}): Promise<{ port: number; cl
         },
       });
     });
-    // Live updates ride a single WebSocket per tab (separate from the HTTP pool).
-    setupWebSocket(server, runs, verbose);
-    // Guest workers connect on /worker (separate path on the same server).
-    workers.attach(server, () => registry.projects[0]?.name ?? "Mysteron host", verbose);
+    // Two WebSocket endpoints share this HTTP server: the browser hub (/ws) and
+    // the guest-worker channel (/worker). They're created in noServer mode and
+    // routed here by path — multiple path-scoped WebSocketServers on one server
+    // abort each other's handshakes (HTTP 400). /ws is auth-gated here.
+    const wsHub = setupWebSocket(runs, verbose);
+    const workerWss = workers.createWss(() => registry.projects[0]?.name ?? "Mysteron host", verbose);
+    server.on("upgrade", (req, socket, head) => {
+      const path = (req.url || "").split("?")[0];
+      if (path === "/ws") {
+        isAuthedByCookieHeader(req.headers.cookie)
+          .then((ok) => {
+            if (!ok) {
+              socket.write("HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n");
+              socket.destroy();
+              return;
+            }
+            wsHub.handleUpgrade(req, socket, head, (ws) => wsHub.emit("connection", ws, req));
+          })
+          .catch(() => socket.destroy());
+      } else if (path === "/worker") {
+        workerWss.handleUpgrade(req, socket, head, (ws) => workerWss.emit("connection", ws, req));
+      } else {
+        socket.destroy();
+      }
+    });
   });
 }

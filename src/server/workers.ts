@@ -1,4 +1,3 @@
-import type { Server } from "node:http";
 import { WebSocketServer, type WebSocket } from "ws";
 import { nanoid } from "nanoid";
 import { bus } from "../core/events.js";
@@ -104,8 +103,13 @@ export class WorkerRegistry {
     return () => clearInterval(timer);
   }
 
-  attach(server: Server, projectName: () => string, verbose = false): void {
-    const wss = new WebSocketServer({ server, path: "/worker" });
+  /**
+   * The /worker WebSocketServer in `noServer` mode — index.ts routes the
+   * upgrade to it by path (path-scoped servers sharing one HTTP server abort
+   * each other's handshakes).
+   */
+  createWss(projectName: () => string, verbose = false): WebSocketServer {
+    const wss = new WebSocketServer({ noServer: true });
     wss.on("connection", (socket: WebSocket) => {
       let id: string | undefined;
 
@@ -175,5 +179,6 @@ export class WorkerRegistry {
       socket.on("close", drop);
       socket.on("error", drop);
     });
+    return wss;
   }
 }
