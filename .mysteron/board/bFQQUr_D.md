@@ -6,8 +6,8 @@ companionId: c1bf55fe-3e93-410d-94a7-cfde4dc1f80e
 assignee: Waldorf the Compiler
 labels: []
 created: '2026-06-25T18:12:44.496Z'
-updated: '2026-06-25T18:18:22.181Z'
-order: 0
+updated: '2026-06-25T19:07:25.465Z'
+order: 1
 ---
 
 It would be good if the terminal for Guests could be a bit more exciting... Some sort of TUI, logs, spinners, colors, stats, whatever?!?

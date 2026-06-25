@@ -1,4 +1,5 @@
 import express, { type Express, type Request, type Response } from "express";
+import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import {
   bus,
@@ -19,6 +20,7 @@ import {
   readDoc,
   updateTicket,
   writeDoc,
+  generateCompanion,
   regenerateCompanion,
   buildRoster,
   seedCompanionSpecs,
@@ -377,13 +379,15 @@ export function registerApi(
   app.patch("/api/projects/:id/config", async (req: Request, res: Response) => {
     const r = await resolve(req.params.id);
     if (!r) return notFound(res);
-    const { yolo, recipe, allowedTools, disallowedTools, regenerateCompanionId, pluginOptions } = (req.body ?? {}) as {
+    const { yolo, recipe, allowedTools, disallowedTools, regenerateCompanionId, pluginOptions, addCompanion, deleteCompanionId } = (req.body ?? {}) as {
       yolo?: boolean;
       recipe?: string;
       allowedTools?: string[];
       disallowedTools?: string[];
       regenerateCompanionId?: string;
       pluginOptions?: ProjectConfig["pluginOptions"];
+      addCompanion?: { role: string };
+      deleteCompanionId?: string;
     };
     const next = { ...r.config, companions: [...r.config.companions] };
     if (typeof yolo === "boolean") next.yolo = yolo;
@@ -403,6 +407,16 @@ export function registerApi(
         const { name } = regenerateCompanion(c);
         return { ...c, name, avatarSeed: name };
       });
+    }
+    // Add a custom companion with a generated name.
+    if (addCompanion && typeof addCompanion.role === "string" && addCompanion.role.trim()) {
+      const { name } = generateCompanion();
+      const id = randomUUID();
+      next.companions = [...next.companions, { id, name, role: addCompanion.role.trim(), avatarSeed: name }];
+    }
+    // Remove a companion (must keep at least one).
+    if (typeof deleteCompanionId === "string" && next.companions.length > 1) {
+      next.companions = next.companions.filter((c) => c.id !== deleteCompanionId);
     }
     await saveProjectConfig(r.entry.path, next);
     await seedCompanionSpecs(r.entry.path, next);

@@ -531,6 +531,25 @@ export function CompanionTab({ detail }: { detail: ProjectDetail }) {
   );
   const recipes = useAsync(() => api<{ recipes: Recipe[] }>("/api/recipes"), []);
   const [saving, setSaving] = useState("");
+  const [newRole, setNewRole] = useState("");
+  const [addingCompanion, setAddingCompanion] = useState(false);
+
+  const addCompanion = async () => {
+    const role = newRole.trim();
+    if (!role || addingCompanion) return;
+    setAddingCompanion(true);
+    try {
+      await api(`/api/projects/${detail.entry.id}/config`, {
+        method: "PATCH",
+        body: JSON.stringify({ addCompanion: { role } }),
+      });
+      setNewRole("");
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setAddingCompanion(false);
+    }
+  };
 
   const choose = async (id: string) => {
     if (id === c.recipe || saving) return;
@@ -563,8 +582,21 @@ export function CompanionTab({ detail }: { detail: ProjectDetail }) {
               projectId={detail.entry.id}
               companion={comp}
               activeRun={(detail.activeRuns ?? []).find((r) => r.companionId === comp.id)}
+              canDelete={c.companions.length > 1}
             />
           ))}
+        </div>
+        <div class="mt-3 flex gap-2">
+          <input
+            class="input flex-1"
+            placeholder="New companion role (e.g. tester, designer)"
+            value={newRole}
+            onInput={(e) => setNewRole((e.target as HTMLInputElement).value)}
+            onKeyDown={(e) => e.key === "Enter" && addCompanion()}
+          />
+          <button class="btn btn-primary btn-sm shrink-0" disabled={!newRole.trim() || addingCompanion} onClick={addCompanion}>
+            {addingCompanion ? "Adding…" : "+ Add"}
+          </button>
         </div>
         <div class="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
           <b class="text-zinc-400">Yolo mode</b>
@@ -859,10 +891,12 @@ function CompanionRow({
   projectId,
   companion,
   activeRun,
+  canDelete,
 }: {
   projectId: string;
   companion: Companion;
   activeRun?: RunSummary;
+  canDelete: boolean;
 }) {
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -876,6 +910,21 @@ function CompanionRow({
       await api(`/api/projects/${projectId}/config`, {
         method: "PATCH",
         body: JSON.stringify({ regenerateCompanionId: companion.id }),
+      });
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async () => {
+    if (busy || !confirm(`Remove ${companion.name}? Their spec file stays on disk.`)) return;
+    setBusy(true);
+    try {
+      await api(`/api/projects/${projectId}/config`, {
+        method: "PATCH",
+        body: JSON.stringify({ deleteCompanionId: companion.id }),
       });
     } catch (e) {
       alert((e as Error).message);
@@ -933,6 +982,11 @@ function CompanionRow({
         <button class="btn btn-sm" disabled={busy} title="Roll a new name + avatar (keeps the session)" onClick={regenerate}>
           {busy ? "…" : "🎲"}
         </button>
+        {canDelete && (
+          <button class="btn btn-danger btn-sm" disabled={busy} title="Remove this companion" onClick={remove}>
+            ✕
+          </button>
+        )}
       </div>
       {editing && (
         <div class="mt-2">
