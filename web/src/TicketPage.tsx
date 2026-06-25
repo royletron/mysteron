@@ -11,7 +11,7 @@ import {
   type Ticket,
 } from "./api";
 import { useAsync, useRunStream } from "./hooks";
-import { ErrorBox, LiveDot, Loading, RunTimer, CloudGlyph } from "./ui";
+import { ErrorBox, LiveDot, Loading, RunTimer, CloudGlyph, RunMachine } from "./ui";
 import { Avatar } from "./Avatar";
 import { AgentLog, AgentThinking } from "./AgentLog";
 import { ChevronDown, ChevronUp } from "lucide-preact";
@@ -227,22 +227,25 @@ export function TicketPage({
         setSelectedRunId(r.id);
         setInfoOpen(false);
       }}
-      class={`flex items-center justify-between gap-2 rounded-sm border px-2 py-1 text-left text-xs ${
+      class={`flex flex-col gap-1 rounded-sm border px-2 py-1 text-left text-xs ${
         r.id === selectedRunId
           ? "border-violet-500 text-zinc-100"
           : "border-zinc-800 text-zinc-400 hover:border-zinc-600"
       }`}
     >
-      <span class={`inline-flex items-center gap-1.5 ${RUN_STATUS[r.status]?.color}`}>
-        {RUN_STATUS[r.status]?.live && <LiveDot />}
-        {RUN_STATUS[r.status]?.label || r.status}
+      <span class="flex items-center justify-between gap-2">
+        <span class={`inline-flex items-center gap-1.5 ${RUN_STATUS[r.status]?.color}`}>
+          {RUN_STATUS[r.status]?.live && <LiveDot />}
+          {RUN_STATUS[r.status]?.label || r.status}
+        </span>
+        <span class="inline-flex items-center gap-1.5 text-zinc-500">
+          {fmtWhen(r.startedAt)}
+          <RunTimer run={r} prefix=" · " />
+          {r.costUsd != null && ` · ${fmtCost(r.costUsd)}`}
+        </span>
       </span>
-      <span class="inline-flex items-center gap-1.5 text-zinc-500">
-        {r.guestLabel && <span class="text-sky-400" title={`Ran on guest machine “${r.guestLabel}”`}>{r.guestLabel}</span>}
-        {r.guestLabel && <span>·</span>}
-        {fmtWhen(r.startedAt)}
-        <RunTimer run={r} prefix=" · " />
-        {r.costUsd != null && ` · ${fmtCost(r.costUsd)}`}
+      <span class="flex justify-end">
+        <RunMachine run={r} />
       </span>
     </button>
   );
