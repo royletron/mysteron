@@ -281,6 +281,44 @@ function AgentHistory({ projectId, ticketId, evt }: { projectId: string; ticketI
   );
   const runs = (data?.runs ?? []).filter((r) => r.ticketId === ticketId);
   const active = runs.some((r) => r.status === "running");
+  // Guest runs get their own lane so the history doesn't read as one jumbled list.
+  const local = runs.filter((r) => !r.guestLabel);
+  const guests = runs.filter((r) => r.guestLabel);
+
+  const runRow = (r: RunSummary) => {
+    const s = RUN_STATUS[r.status];
+    return (
+      <a
+        key={r.id}
+        href={agentViewUrl(projectId, ticketId)}
+        title={r.command}
+        class="flex items-center justify-between gap-2 rounded-sm border border-zinc-800 px-2.5 py-1.5 text-xs text-zinc-400 hover:border-violet-500"
+      >
+        <span class={`inline-flex items-center gap-1.5 ${s?.color}`}>
+          {s?.live && <LiveDot />}
+          {s?.label || r.status}
+        </span>
+        <span class="flex items-center gap-2 text-zinc-500">
+          <span>{r.companion}</span>
+          {r.guestLabel && (
+            <span class="inline-flex items-center gap-1 text-sky-400" title={`Ran on guest machine “${r.guestLabel}”`}>
+              <CloudGlyph size={11} /> {r.guestLabel}
+            </span>
+          )}
+          <span>·</span>
+          <span>{fmtWhen(r.startedAt)}</span>
+          <RunTimer run={r} prefix="· " />
+          {r.costUsd != null && <span title={r.numTurns != null ? `${r.numTurns} turns` : undefined}>· {fmtCost(r.costUsd)}</span>}
+          {r.branch && (
+            <span class="inline-flex items-center gap-1 text-violet-300" title={`Work committed to branch ${r.branch} — git merge ${r.branch}`}>
+              ⎇ {r.branch}
+            </span>
+          )}
+          {r.logAvailable === false && <span title={`Ran on ${r.hostname}; logs are local to that machine`}>🖥 {r.hostname}</span>}
+        </span>
+      </a>
+    );
+  };
 
   return (
     <div class="mt-5 border-t border-zinc-800 pt-4">
@@ -305,41 +343,16 @@ function AgentHistory({ projectId, ticketId, evt }: { projectId: string; ticketI
       ) : runs.length === 0 ? (
         <div class="text-sm text-zinc-500">No agent runs yet. Press “Run agent” to start the companion.</div>
       ) : (
-        <div class="flex flex-col gap-1.5">
-          {runs.map((r) => {
-            const s = RUN_STATUS[r.status];
-            return (
-              <a
-                key={r.id}
-                href={agentViewUrl(projectId, ticketId)}
-                title={r.command}
-                class="flex items-center justify-between gap-2 rounded-sm border border-zinc-800 px-2.5 py-1.5 text-xs text-zinc-400 hover:border-violet-500"
-              >
-                <span class={`inline-flex items-center gap-1.5 ${s?.color}`}>
-                  {s?.live && <LiveDot />}
-                  {s?.label || r.status}
-                </span>
-                <span class="flex items-center gap-2 text-zinc-500">
-                  <span>{r.companion}</span>
-                  {r.guestLabel && (
-                    <span class="inline-flex items-center gap-1 text-sky-400" title={`Ran on guest machine “${r.guestLabel}”`}>
-                      <CloudGlyph size={11} /> {r.guestLabel}
-                    </span>
-                  )}
-                  <span>·</span>
-                  <span>{fmtWhen(r.startedAt)}</span>
-                  <RunTimer run={r} prefix="· " />
-                  {r.costUsd != null && <span title={r.numTurns != null ? `${r.numTurns} turns` : undefined}>· {fmtCost(r.costUsd)}</span>}
-                  {r.branch && (
-                    <span class="inline-flex items-center gap-1 text-violet-300" title={`Work committed to branch ${r.branch} — git merge ${r.branch}`}>
-                      ⎇ {r.branch}
-                    </span>
-                  )}
-                  {r.logAvailable === false && <span title={`Ran on ${r.hostname}; logs are local to that machine`}>🖥 {r.hostname}</span>}
-                </span>
-              </a>
-            );
-          })}
+        <div class="flex flex-col gap-3">
+          {local.length > 0 && <div class="flex flex-col gap-1.5">{local.map(runRow)}</div>}
+          {guests.length > 0 && (
+            <div class="flex flex-col gap-1.5">
+              <span class="inline-flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-sky-400">
+                <CloudGlyph size={11} /> Guest runs
+              </span>
+              {guests.map(runRow)}
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -209,6 +209,37 @@ export function TicketPage({
         ▶
       </button>
     );
+  // Guest runs get their own lane in the history so the list stays readable.
+  const localRuns = runs.filter((r) => !r.guestLabel);
+  const guestRuns = runs.filter((r) => r.guestLabel);
+  const runButton = (r: RunSummary) => (
+    <button
+      key={r.id}
+      title={r.command}
+      onClick={() => {
+        setSelectedRunId(r.id);
+        setInfoOpen(false);
+      }}
+      class={`flex items-center justify-between gap-2 rounded-sm border px-2 py-1 text-left text-xs ${
+        r.id === selectedRunId
+          ? "border-violet-500 text-zinc-100"
+          : "border-zinc-800 text-zinc-400 hover:border-zinc-600"
+      }`}
+    >
+      <span class={`inline-flex items-center gap-1.5 ${RUN_STATUS[r.status]?.color}`}>
+        {RUN_STATUS[r.status]?.live && <LiveDot />}
+        {RUN_STATUS[r.status]?.label || r.status}
+      </span>
+      <span class="inline-flex items-center gap-1.5 text-zinc-500">
+        {r.guestLabel && <span class="text-sky-400" title={`Ran on guest machine “${r.guestLabel}”`}>{r.guestLabel}</span>}
+        {r.guestLabel && <span>·</span>}
+        {fmtWhen(r.startedAt)}
+        <RunTimer run={r} prefix=" · " />
+        {r.costUsd != null && ` · ${fmtCost(r.costUsd)}`}
+      </span>
+    </button>
+  );
+
   const infoDetails = () => (
     <>
       <div class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
@@ -237,32 +268,16 @@ export function TicketPage({
       {runs.length === 0 ? (
         <div class="text-sm text-zinc-500">No runs yet.</div>
       ) : (
-        <div class="flex flex-col gap-1">
-          {runs.map((r) => (
-            <button
-              key={r.id}
-              title={r.command}
-              onClick={() => {
-                setSelectedRunId(r.id);
-                setInfoOpen(false);
-              }}
-              class={`flex items-center justify-between gap-2 rounded-sm border px-2 py-1 text-left text-xs ${
-                r.id === selectedRunId
-                  ? "border-violet-500 text-zinc-100"
-                  : "border-zinc-800 text-zinc-400 hover:border-zinc-600"
-              }`}
-            >
-              <span class={`inline-flex items-center gap-1.5 ${RUN_STATUS[r.status]?.color}`}>
-                {RUN_STATUS[r.status]?.live && <LiveDot />}
-                {RUN_STATUS[r.status]?.label || r.status}
+        <div class="flex flex-col gap-2.5">
+          {localRuns.length > 0 && <div class="flex flex-col gap-1">{localRuns.map(runButton)}</div>}
+          {guestRuns.length > 0 && (
+            <div class="flex flex-col gap-1">
+              <span class="inline-flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-sky-400">
+                <CloudGlyph /> Guest runs
               </span>
-              <span class="text-zinc-500">
-                {fmtWhen(r.startedAt)}
-                <RunTimer run={r} prefix=" · " />
-                {r.costUsd != null && ` · ${fmtCost(r.costUsd)}`}
-              </span>
-            </button>
-          ))}
+              {guestRuns.map(runButton)}
+            </div>
+          )}
         </div>
       )}
     </>
