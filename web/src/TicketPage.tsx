@@ -270,6 +270,37 @@ export function TicketPage({
         <b class="text-zinc-400">Ticket id</b>
         <span class="font-mono">{ticket.id}</span>
       </div>
+      {(ticket.dependencies?.length || ticket.blocks?.length) ? (
+        <div class="mt-3 flex flex-col gap-2 text-xs">
+          {ticket.dependencies && ticket.dependencies.length > 0 && (
+            <div>
+              <span class="text-zinc-500">Blocked by</span>
+              <div class="mt-1 flex flex-col gap-1">
+                {ticket.dependencies.map((d) => (
+                  <div key={d.id} class="flex items-center gap-2">
+                    <span class={d.satisfied ? "text-emerald-400" : "text-amber-400"}>{d.satisfied ? "✓" : "⏳"}</span>
+                    <span class="flex-1 truncate">{d.title}</span>
+                    {!d.missing && <span class="text-zinc-500">{d.state}</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {ticket.blocks && ticket.blocks.length > 0 && (
+            <div>
+              <span class="text-zinc-500">Blocks</span>
+              <div class="mt-1 flex flex-col gap-1">
+                {ticket.blocks.map((b) => (
+                  <div key={b.id} class="flex items-center gap-2">
+                    <span class="flex-1 truncate">{b.title}</span>
+                    <span class="text-zinc-500">{b.state}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      ) : null}
       <label class="field-label">Description</label>
       <pre class="max-h-[220px] overflow-auto whitespace-pre-wrap rounded-sm border border-zinc-800 bg-zinc-950 p-2.5 font-mono text-xs">
         {ticket.body || "(no description)"}

@@ -10,7 +10,7 @@ process.env.MYSTERON_HOME = path.join(tmp, "home");
 process.env.CLAUDE_PROJECTS_DIR = path.join(tmp, "claude");
 
 const { initProject, loadProjectConfig } = await import("../src/core/project.js");
-const { createTicket, listTickets, nextTicket, updateTicket, getTicket, deleteTicket, addAttachment, removeAttachment, readAttachment, binStaleDone, moveTicketsByState } = await import("../src/core/board.js");
+const { createTicket, listTickets, nextTicket, nextTicketForCompanion, updateTicket, getTicket, deleteTicket, addAttachment, removeAttachment, readAttachment, binStaleDone, moveTicketsByState, listTicketsEnriched, blockedTicketIds } = await import("../src/core/board.js");
 const { readDoc, writeDoc } = await import("../src/core/docs.js");
 const { loadRegistry } = await import("../src/core/registry.js");
 const { usageInWindow } = await import("../src/plugins/usage-monitor/usage.js");
@@ -122,6 +122,47 @@ test("tickets: create, list (priority sorted), update, next", async () => {
   const moved = await updateTicket(projectRoot, hi.id, { state: "done" });
   assert.equal(moved?.state, "done");
   assert.equal((await listTickets(projectRoot, { state: "done" })).length, 1);
+});
+
+test("dependencies: pause the queue until upstream lands, expose both directions", async () => {
+  const root = path.join(tmp, "deps");
+  await fs.mkdir(root, { recursive: true });
+  const up = await createTicket(root, { title: "foundation", state: "ready" });
+  const down = await createTicket(root, { title: "depends on it", state: "ready", blockedBy: [up.id] });
+
+  // blockedBy round-trips through frontmatter.
+  assert.deepEqual((await getTicket(root, down.id))?.blockedBy, [up.id]);
+
+  // While the upstream isn't done, the downstream is blocked and skipped by the queue.
+  assert.ok((await blockedTicketIds(root)).has(down.id));
+  assert.equal((await nextTicket(root))?.id, up.id, "queue skips the blocked ticket");
+
+  // Enrichment surfaces both directions.
+  const enriched = await listTicketsEnriched(root);
+  const downE = enriched.find((t) => t.id === down.id)!;
+  assert.equal(downE.blocked, true);
+  assert.equal(downE.dependencies[0].id, up.id);
+  assert.equal(downE.dependencies[0].satisfied, false);
+  const upE = enriched.find((t) => t.id === up.id)!;
+  assert.equal(upE.blocks[0].id, down.id);
+  assert.equal(upE.blocked, false);
+
+  // Once the upstream is done (no open branch in this non-git dir), it unblocks.
+  await updateTicket(root, up.id, { state: "done" });
+  assert.ok(!(await blockedTicketIds(root)).has(down.id));
+  assert.equal((await nextTicketForCompanion(root, "x", { includeUnassigned: true }))?.id, down.id);
+  assert.equal((await listTicketsEnriched(root)).find((t) => t.id === down.id)!.blocked, false);
+
+  // A dependency on a ticket that doesn't exist is treated as satisfied, not a deadlock.
+  const orphan = await createTicket(root, { title: "orphan", state: "ready", blockedBy: ["nope1234"] });
+  assert.ok(!(await blockedTicketIds(root)).has(orphan.id));
+  const orphanE = (await listTicketsEnriched(root)).find((t) => t.id === orphan.id)!;
+  assert.equal(orphanE.dependencies[0].missing, true);
+  assert.equal(orphanE.dependencies[0].satisfied, true);
+
+  // Clearing dependencies removes the field.
+  await updateTicket(root, down.id, { blockedBy: [] });
+  assert.equal((await getTicket(root, down.id))?.blockedBy, undefined);
 });
 
 test("attachments: stored as bytes + frontmatter, de-duped, cleaned up on delete", async () => {

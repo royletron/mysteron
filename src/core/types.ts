@@ -34,6 +34,12 @@ export interface Ticket {
   body: string;
   /** Filenames of image attachments, stored under board/attachments/<id>. */
   attachments?: string[];
+  /**
+   * Ids of tickets this one is "blocked by": they must land in main (be done and,
+   * if they produced a branch, merged) before this ticket can be pulled from the
+   * queue. The inverse — tickets this one "blocks" — is computed on read.
+   */
+  blockedBy?: string[];
 }
 
 /**

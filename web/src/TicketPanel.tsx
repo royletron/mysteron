@@ -14,6 +14,7 @@ import {
 } from "./api";
 import { useAsync } from "./hooks";
 import { LiveDot, RunTimer, RunMachine } from "./ui";
+import { Lock } from "lucide-preact";
 import type { AppEvent } from "./App";
 
 function agentViewUrl(projectId: string, ticketId: string, run = false): string {
@@ -29,6 +30,7 @@ export function TicketPanel({
   projectId,
   ticket,
   companions,
+  allTickets = [],
   evt,
   onClose,
   onSaved,
@@ -36,6 +38,8 @@ export function TicketPanel({
   projectId: string;
   ticket: Ticket | null;
   companions: Companion[];
+  /** Every ticket on the board, for picking dependencies. */
+  allTickets?: Ticket[];
   evt: AppEvent;
   onClose: () => void;
   onSaved: () => void;
@@ -47,6 +51,7 @@ export function TicketPanel({
   const [priority, setPriority] = useState<TicketPriority>(ticket?.priority ?? "medium");
   const [labels, setLabels] = useState((ticket?.labels ?? []).join(", "));
   const [companionId, setCompanionId] = useState(ticket?.companionId ?? "");
+  const [blockedBy, setBlockedBy] = useState<string[]>(ticket?.blockedBy ?? []);
   const [err, setErr] = useState("");
 
   const save = async () => {
@@ -61,6 +66,7 @@ export function TicketPanel({
       priority,
       companionId: companionId || undefined,
       labels: labels.split(",").map((s) => s.trim()).filter(Boolean),
+      blockedBy,
     };
     try {
       if (isEdit && ticket) {
@@ -159,6 +165,14 @@ export function TicketPanel({
             value={labels}
             onInput={(e) => setLabels((e.target as HTMLInputElement).value)}
           />
+
+          <Dependencies
+            ticket={ticket}
+            allTickets={allTickets}
+            blockedBy={blockedBy}
+            onChange={setBlockedBy}
+          />
+
           {err && <p class="mt-2 text-sm text-red-400">{err}</p>}
 
           {isEdit && ticket ? (
@@ -188,6 +202,104 @@ export function TicketPanel({
           </button>
         </footer>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Dependency editor. "Blocked by" = the tickets this one waits on (they must be
+ * done and merged to main before it leaves the queue). "Blocks" = the downstream
+ * tickets waiting on this one — read-only, since it's the inverse of their own
+ * "blocked by". Pick from any other ticket on the board.
+ */
+function Dependencies({
+  ticket,
+  allTickets,
+  blockedBy,
+  onChange,
+}: {
+  ticket: Ticket | null;
+  allTickets: Ticket[];
+  blockedBy: string[];
+  onChange: (ids: string[]) => void;
+}) {
+  const byId = new Map(allTickets.map((t) => [t.id, t]));
+  // Candidates: every other ticket not already a dependency. Excluding self keeps
+  // a ticket from blocking itself; the server treats a missing id as satisfied.
+  const candidates = allTickets.filter((t) => t.id !== ticket?.id && !blockedBy.includes(t.id));
+  const blocks = ticket?.blocks ?? [];
+
+  const add = (id: string) => {
+    if (id && !blockedBy.includes(id)) onChange([...blockedBy, id]);
+  };
+  const remove = (id: string) => onChange(blockedBy.filter((x) => x !== id));
+
+  return (
+    <div class="mt-3">
+      <label class="field-label !mt-0 flex items-center gap-1.5">
+        <Lock size={12} /> Blocked by
+      </label>
+      <p class="mb-1.5 text-xs text-zinc-500">
+        This ticket waits in the queue until these are done and merged to main.
+      </p>
+      {blockedBy.length > 0 && (
+        <div class="mb-2 flex flex-col gap-1">
+          {blockedBy.map((id) => {
+            const dep = byId.get(id);
+            const satisfied = dep?.state === "done";
+            return (
+              <div
+                key={id}
+                class="flex items-center gap-2 rounded-sm border border-zinc-800 bg-zinc-900/60 px-2.5 py-1 text-xs"
+              >
+                <span class={satisfied ? "text-emerald-400" : "text-amber-400"} title={satisfied ? "Landed" : "Not yet in main"}>
+                  {satisfied ? "✓" : "⏳"}
+                </span>
+                <span class="flex-1 truncate">{dep ? dep.title : id}</span>
+                {dep && <span class="text-zinc-500">{STATE_LABELS[dep.state]}</span>}
+                <button class="text-zinc-500 hover:text-red-400" title="Remove dependency" onClick={() => remove(id)}>
+                  ✕
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {candidates.length > 0 ? (
+        <select
+          class="input"
+          value=""
+          onChange={(e) => {
+            const sel = e.target as HTMLSelectElement;
+            add(sel.value);
+            sel.value = "";
+          }}
+        >
+          <option value="">+ Add a dependency…</option>
+          {candidates.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.title} ({STATE_LABELS[t.state]})
+            </option>
+          ))}
+        </select>
+      ) : (
+        <p class="text-xs text-zinc-600">No other tickets to depend on.</p>
+      )}
+
+      {blocks.length > 0 && (
+        <>
+          <label class="field-label">Blocks</label>
+          <p class="mb-1.5 text-xs text-zinc-500">Tickets waiting on this one before they can run.</p>
+          <div class="flex flex-col gap-1">
+            {blocks.map((b) => (
+              <div key={b.id} class="flex items-center gap-2 rounded-sm border border-zinc-800 px-2.5 py-1 text-xs text-zinc-400">
+                <span class="flex-1 truncate">{b.title}</span>
+                <span class="text-zinc-500">{STATE_LABELS[b.state]}</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }

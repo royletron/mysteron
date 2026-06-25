@@ -11,7 +11,7 @@ import {
 import { navigate } from "./hooks";
 import { Avatar } from "./Avatar";
 import { LiveDot, CloudGlyph } from "./ui";
-import { Loader2, MoreHorizontal } from "lucide-preact";
+import { Loader2, MoreHorizontal, Lock } from "lucide-preact";
 
 export function Board({
   detail,
@@ -215,6 +215,18 @@ function TicketCard({
       </div>
       <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
         <span class="tag">{t.priority}</span>
+        {(() => {
+          const pending = (t.dependencies ?? []).filter((d) => !d.satisfied);
+          if (!t.blocked || pending.length === 0) return null;
+          return (
+            <span
+              class="tag inline-flex items-center gap-1 text-amber-400"
+              title={`Blocked by: ${pending.map((d) => d.title).join(", ")}`}
+            >
+              <Lock size={11} /> Blocked by {pending.length}
+            </span>
+          );
+        })()}
         {guestLabel && (
           <span class="tag inline-flex items-center gap-1 text-sky-400" title={`Running on guest machine “${guestLabel}”`}>
             <CloudGlyph size={11} /> {guestLabel}

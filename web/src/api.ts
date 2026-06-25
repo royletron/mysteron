@@ -4,6 +4,21 @@
 export type TicketState = "backlog" | "ready" | "in-progress" | "review" | "done" | "bin";
 export type TicketPriority = "low" | "medium" | "high";
 
+/** A resolved "blocked by" edge: the upstream ticket and whether it's landed in main. */
+export interface DependencyLink {
+  id: string;
+  title: string;
+  state: TicketState;
+  satisfied: boolean;
+  missing: boolean;
+}
+
+export interface TicketRef {
+  id: string;
+  title: string;
+  state: TicketState;
+}
+
 export interface Ticket {
   id: string;
   title: string;
@@ -16,6 +31,14 @@ export interface Ticket {
   updated: string;
   body: string;
   attachments?: string[];
+  /** Ids of tickets this one depends on (must land in main first). */
+  blockedBy?: string[];
+  /** Resolved dependencies, present on board responses (see listTicketsEnriched). */
+  dependencies?: DependencyLink[];
+  /** Tickets that depend on this one (downstream waiters). */
+  blocks?: TicketRef[];
+  /** True while a dependency hasn't landed in main yet — paused in the queue. */
+  blocked?: boolean;
 }
 
 export interface Companion {

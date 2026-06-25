@@ -222,6 +222,7 @@ export function Project({ projectId, tab: urlTab, evt }: { projectId: string; ta
           projectId={projectId}
           ticket={editing === "new" ? null : editing}
           companions={c.companions}
+          allTickets={Object.values(data.board).flat()}
           evt={evt}
           onClose={() => setEditing(null)}
           onSaved={() => {

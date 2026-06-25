@@ -1,5 +1,5 @@
 import { bus, type AutopilotStatus } from "../core/events.js";
-import { listTickets, nextTicketForCompanion } from "../core/board.js";
+import { blockedTicketIds, listTickets, nextTicketForCompanion } from "../core/board.js";
 import { loadProjectConfig } from "../core/project.js";
 import { checkUsageBudget } from "./budget.js";
 import type { ProjectConfig } from "../core/types.js";
@@ -173,8 +173,12 @@ export class Autopilot {
     const idleWorkers = this.workers.idle();
     if (idleWorkers.length === 0) return false;
     const ready = await listTickets(state.projectRoot, { state: "ready" });
+    const blocked = await blockedTicketIds(state.projectRoot);
     const free = ready.filter(
-      (t) => (hostMaxed || !t.companionId) && !this.runs.activeForTicket(state.projectId, t.id),
+      (t) =>
+        !blocked.has(t.id) &&
+        (hostMaxed || !t.companionId) &&
+        !this.runs.activeForTicket(state.projectId, t.id),
     );
     let dispatched = false;
     for (const worker of idleWorkers) {

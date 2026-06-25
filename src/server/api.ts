@@ -12,6 +12,7 @@ import {
   listDocs,
   listMemories,
   listTickets,
+  listTicketsEnriched,
   moveTicketsByState,
   loadProjectConfig,
   readDoc,
@@ -283,7 +284,7 @@ export function registerApi(
   app.get("/api/projects/:id", async (req: Request, res: Response) => {
     const r = await resolve(req.params.id);
     if (!r) return notFound(res);
-    const tickets = await listTickets(r.entry.path);
+    const tickets = await listTicketsEnriched(r.entry.path);
     const board: Record<string, typeof tickets> = {};
     for (const s of TICKET_STATES) board[s] = [];
     for (const t of tickets) board[t.state].push(t);

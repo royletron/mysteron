@@ -3,6 +3,7 @@ import path from "node:path";
 import matter from "gray-matter";
 import { nanoid } from "nanoid";
 import { attachmentsDir, boardDir } from "./paths.js";
+import { unmergedBranchTicketIds } from "./git.js";
 import {
   TICKET_STATES,
   type Ticket,
@@ -52,6 +53,7 @@ function parseTicket(id: string, raw: string): Ticket {
     updated: (data.updated as string) ?? now(),
     body: content.trim(),
     attachments: Array.isArray(data.attachments) ? (data.attachments as string[]) : undefined,
+    blockedBy: Array.isArray(data.blockedBy) ? (data.blockedBy as string[]) : undefined,
   };
 }
 
@@ -66,6 +68,7 @@ function serializeTicket(t: Ticket): string {
     created: t.created,
     updated: t.updated,
     ...(t.attachments?.length ? { attachments: t.attachments } : {}),
+    ...(t.blockedBy?.length ? { blockedBy: t.blockedBy } : {}),
   };
   return matter.stringify(`\n${t.body.trim()}\n`, fm);
 }
@@ -119,6 +122,7 @@ export async function createTicket(
     companionId?: string;
     assignee?: string;
     labels?: string[];
+    blockedBy?: string[];
   },
 ): Promise<Ticket> {
   await fs.mkdir(boardDir(projectRoot), { recursive: true });
@@ -134,6 +138,7 @@ export async function createTicket(
     created: ts,
     updated: ts,
     body: input.body ?? "",
+    blockedBy: input.blockedBy?.length ? input.blockedBy : undefined,
   };
   await fs.writeFile(ticketPath(projectRoot, ticket.id), serializeTicket(ticket), "utf8");
   return ticket;
@@ -255,16 +260,103 @@ export async function moveTicketsByState(
   return tickets.length;
 }
 
+// --- Dependencies --------------------------------------------------------
+// A ticket can be "blocked by" other tickets: it waits in the queue until each
+// of them has landed in main (is done and, if it produced a branch, merged).
+// The inverse relationship — the tickets a given one "blocks" — is derived.
+
+/** One resolved "blocked by" edge: the upstream ticket and whether it has landed. */
+export interface DependencyLink {
+  id: string;
+  /** Upstream title (falls back to the id when the ticket no longer exists). */
+  title: string;
+  state: TicketState;
+  /** Done and not sitting on an unmerged branch — i.e. it's in main. */
+  satisfied: boolean;
+  /** The id no longer matches any ticket (treated as satisfied so work isn't stuck forever). */
+  missing: boolean;
+}
+
+/** A lightweight reference to a downstream ticket that this one blocks. */
+export interface TicketRef {
+  id: string;
+  title: string;
+  state: TicketState;
+}
+
+export interface EnrichedTicket extends Ticket {
+  /** Resolved "blocked by" dependencies — these must land before this ticket runs. */
+  dependencies: DependencyLink[];
+  /** Tickets that list this one as a dependency (the downstream waiters). */
+  blocks: TicketRef[];
+  /** True while any dependency hasn't landed in main yet. */
+  blocked: boolean;
+}
+
+/** Has a ticket landed in main: marked done and not waiting on an open branch. */
+export function ticketLanded(t: Ticket, unmergedTicketIds: Set<string>): boolean {
+  return t.state === "done" && !unmergedTicketIds.has(t.id);
+}
+
+function resolveDependencies(
+  ticket: Ticket,
+  byId: Map<string, Ticket>,
+  unmergedTicketIds: Set<string>,
+): DependencyLink[] {
+  return (ticket.blockedBy ?? []).map((id) => {
+    const dep = byId.get(id);
+    if (!dep) return { id, title: id, state: "done", satisfied: true, missing: true };
+    return { id, title: dep.title, state: dep.state, satisfied: ticketLanded(dep, unmergedTicketIds), missing: false };
+  });
+}
+
+/** Resolve every ticket's dependencies + downstream blocks, flagging blocked ones. */
+export async function listTicketsEnriched(projectRoot: string): Promise<EnrichedTicket[]> {
+  const all = await listTickets(projectRoot);
+  const byId = new Map(all.map((t) => [t.id, t]));
+  const depIds = new Set(all.flatMap((t) => t.blockedBy ?? []));
+  const unmerged = depIds.size ? await unmergedBranchTicketIds(projectRoot, depIds) : new Set<string>();
+  const blocksMap = new Map<string, TicketRef[]>();
+  for (const t of all) {
+    for (const dep of t.blockedBy ?? []) {
+      const refs = blocksMap.get(dep) ?? [];
+      refs.push({ id: t.id, title: t.title, state: t.state });
+      blocksMap.set(dep, refs);
+    }
+  }
+  return all.map((t) => {
+    const dependencies = resolveDependencies(t, byId, unmerged);
+    return { ...t, dependencies, blocks: blocksMap.get(t.id) ?? [], blocked: dependencies.some((d) => !d.satisfied) };
+  });
+}
+
+/** Ids of tickets currently blocked by a dependency that hasn't landed in main. */
+export async function blockedTicketIds(projectRoot: string): Promise<Set<string>> {
+  const all = await listTickets(projectRoot);
+  const withDeps = all.filter((t) => t.blockedBy?.length);
+  if (withDeps.length === 0) return new Set();
+  const byId = new Map(all.map((t) => [t.id, t]));
+  const depIds = new Set(withDeps.flatMap((t) => t.blockedBy!));
+  const unmerged = await unmergedBranchTicketIds(projectRoot, depIds);
+  const blocked = new Set<string>();
+  for (const t of withDeps) {
+    if (resolveDependencies(t, byId, unmerged).some((d) => !d.satisfied)) blocked.add(t.id);
+  }
+  return blocked;
+}
+
 /**
- * Pull the next actionable ticket: the highest-priority ticket in "ready",
- * optionally moving it to "in-progress" and assigning it.
+ * Pull the next actionable ticket: the highest-priority *unblocked* ticket in
+ * "ready", optionally moving it to "in-progress" and assigning it. Tickets blocked
+ * by an unlanded dependency are skipped so they pause in the queue.
  */
 export async function nextTicket(
   projectRoot: string,
   opts?: { claim?: boolean; assignee?: string },
 ): Promise<Ticket | undefined> {
   const ready = await listTickets(projectRoot, { state: "ready" });
-  const candidate = ready[0];
+  const blocked = await blockedTicketIds(projectRoot);
+  const candidate = ready.find((t) => !blocked.has(t.id));
   if (!candidate) return undefined;
   if (opts?.claim) {
     return updateTicket(projectRoot, candidate.id, {
@@ -276,8 +368,8 @@ export async function nextTicket(
 }
 
 /**
- * The highest-priority "ready" ticket assigned to a given companion (used by the
- * per-companion autopilot so each companion only does its own work).
+ * The highest-priority *unblocked* "ready" ticket assigned to a given companion
+ * (used by the per-companion autopilot so each companion only does its own work).
  */
 export async function nextTicketForCompanion(
   projectRoot: string,
@@ -285,7 +377,10 @@ export async function nextTicketForCompanion(
   opts?: { includeUnassigned?: boolean },
 ): Promise<Ticket | undefined> {
   const ready = await listTickets(projectRoot, { state: "ready" });
+  const blocked = await blockedTicketIds(projectRoot);
   return ready.find(
-    (t) => t.companionId === companionId || (opts?.includeUnassigned && !t.companionId),
+    (t) =>
+      !blocked.has(t.id) &&
+      (t.companionId === companionId || (opts?.includeUnassigned && !t.companionId)),
   );
 }

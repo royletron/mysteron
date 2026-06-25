@@ -7,7 +7,7 @@ import { promisify } from "node:util";
 import { after, test } from "node:test";
 
 const exec = promisify(execFile);
-const { captureSnapshotRef, releaseSnapshotRef, landGuestPatch, listBranches, mergeBranch, deleteBranch, commitBoardChanges } =
+const { captureSnapshotRef, releaseSnapshotRef, landGuestPatch, listBranches, mergeBranch, deleteBranch, commitBoardChanges, unmergedBranchTicketIds } =
   await import("../src/core/git.js");
 
 const roots: string[] = [];
@@ -226,6 +226,20 @@ test("mergeBranch reports conflicts and aborts cleanly", async () => {
   assert.equal(res.conflicted, true);
   assert.equal(await read(root, "a.txt"), "current change\n"); // aborted — tree restored
   assert.equal((await git(root, "status", "--porcelain")).stdout.trim(), "");
+});
+
+test("unmergedBranchTicketIds flags tickets whose work isn't in main yet", async () => {
+  const root = await makeRepo();
+  await commitOnBranch(root, "mysteron/abc12345", "f.txt", "x\n", "Add feature");
+
+  // The ticket with an open branch is flagged; an unrelated id isn't.
+  const open = await unmergedBranchTicketIds(root, ["abc12345", "other678"]);
+  assert.equal(open.has("abc12345"), true);
+  assert.equal(open.has("other678"), false);
+
+  // Once merged, its work is in main, so it no longer counts as unlanded.
+  await mergeBranch(root, "mysteron/abc12345");
+  assert.equal((await unmergedBranchTicketIds(root, ["abc12345"])).has("abc12345"), false);
 });
 
 test("invalid branch names are rejected (no git invocation)", async () => {

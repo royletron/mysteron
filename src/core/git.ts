@@ -284,6 +284,26 @@ export async function listBranches(root: string): Promise<BranchInfo[]> {
   );
 }
 
+/**
+ * Of the given ticket ids, the ones that still have an *unmerged* open branch —
+ * i.e. work that landed on a dedicated branch (see {@link landGuestPatch}, which
+ * names branches `<prefix><ticketId>[-<runId>]`) but isn't in the checked-out
+ * branch yet. Used by the dependency logic to tell "done" apart from "in main":
+ * a ticket can be marked done while its branch is still open for review.
+ */
+export async function unmergedBranchTicketIds(
+  root: string,
+  ticketIds: Iterable<string>,
+): Promise<Set<string>> {
+  const blocked = new Set<string>();
+  const open = (await listBranches(root)).filter((b) => !b.merged);
+  if (open.length === 0) return blocked;
+  for (const id of ticketIds) {
+    if (open.some((b) => b.name.includes(id))) blocked.add(id);
+  }
+  return blocked;
+}
+
 /** Everything under the `.mysteron/` board lives in-tree but the app writes it without committing. */
 const MYSTERON_DIR = ".mysteron/";
 const isBoardPath = (p: string) => p === ".mysteron" || p.startsWith(MYSTERON_DIR);

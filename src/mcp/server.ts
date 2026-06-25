@@ -141,6 +141,10 @@ export async function buildMcpServer(
         priority: z.enum(TICKET_PRIORITIES).optional(),
         labels: z.array(z.string()).optional(),
         assignee: z.string().optional(),
+        blockedBy: z
+          .array(z.string())
+          .optional()
+          .describe("Ids of tickets this one depends on; it waits in the queue until they're done and merged to main."),
       },
     },
     async (args) => json(await createTicket(projectRoot, args)),
@@ -150,7 +154,7 @@ export async function buildMcpServer(
     "update_ticket",
     {
       description:
-        "Update a ticket: change its state (e.g. move to in-progress/review/done), title, body, priority, assignee or labels.",
+        "Update a ticket: change its state (e.g. move to in-progress/review/done), title, body, priority, assignee, labels or dependencies (blockedBy).",
       inputSchema: {
         id: z.string(),
         state: z.enum(TICKET_STATES).optional(),
@@ -159,6 +163,10 @@ export async function buildMcpServer(
         priority: z.enum(TICKET_PRIORITIES).optional(),
         assignee: z.string().optional(),
         labels: z.array(z.string()).optional(),
+        blockedBy: z
+          .array(z.string())
+          .optional()
+          .describe("Ids of tickets this one depends on; it waits in the queue until they're done and merged to main. Pass [] to clear."),
       },
     },
     async ({ id, ...patch }) => {
