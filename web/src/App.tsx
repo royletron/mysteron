@@ -72,7 +72,7 @@ function AppShell() {
 
   return (
     <div class="flex min-h-[100dvh] flex-col">
-      <header class="sticky top-0 z-10 flex items-center gap-2 border-b border-zinc-800 bg-zinc-950/80 px-4 py-3 backdrop-blur md:px-6">
+      <header class="sticky top-0 z-20 flex items-center gap-2 border-b border-zinc-800 bg-zinc-950/80 px-4 py-3 backdrop-blur md:px-6">
         <a href="#/" class="flex shrink-0 items-center gap-2">
           <span class="relative inline-flex h-[26px] w-[26px] shrink-0 items-center justify-center">
             <span class="logo-glow" aria-hidden="true" />
