@@ -1,12 +1,12 @@
 ---
 title: Agent History
-state: done
+state: bin
 priority: medium
 assignee: Waldorf the Compiler
 labels:
   - agent
 created: '2026-06-23T16:52:08.741Z'
-updated: '2026-06-23T21:39:52.585Z'
+updated: '2026-06-25T16:45:25.651Z'
 ---
 
 For a given ticket it would be great if I could go back and see the history for the work the AI agents have done?

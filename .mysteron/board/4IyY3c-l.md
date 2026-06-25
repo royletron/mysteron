@@ -1,12 +1,12 @@
 ---
 title: Toast!
-state: review
+state: done
 priority: medium
 companionId: c1bf55fe-3e93-410d-94a7-cfde4dc1f80e
 assignee: Waldorf the Compiler
 labels: []
 created: '2026-06-25T16:22:52.670Z'
-updated: '2026-06-25T16:27:27.376Z'
+updated: '2026-06-25T16:45:29.811Z'
 ---
 
 Could we stick a toast in when a new guest connects/disconnects? Could we also make the overlay not opaque? Very hard to read :P

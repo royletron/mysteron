@@ -1,12 +1,12 @@
 ---
 title: Usage Is Still Borked
-state: done
+state: bin
 priority: medium
 companionId: c1bf55fe-3e93-410d-94a7-cfde4dc1f80e
 assignee: Waldorf the Compiler
 labels: []
 created: '2026-06-24T00:49:36.470Z'
-updated: '2026-06-25T16:21:36.873Z'
+updated: '2026-06-25T16:45:25.748Z'
 attachments:
   - Screenshot 2026-06-24 at 01.48.24.png
   - Screenshot 2026-06-24 at 01.48.30.png

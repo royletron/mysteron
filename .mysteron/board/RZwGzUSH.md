@@ -1,12 +1,12 @@
 ---
 title: Agent Runs
-state: done
+state: bin
 priority: medium
 companionId: c1bf55fe-3e93-410d-94a7-cfde4dc1f80e
 assignee: Waldorf the Compiler
 labels: []
 created: '2026-06-25T15:39:31.079Z'
-updated: '2026-06-25T16:21:36.885Z'
+updated: '2026-06-25T16:45:25.757Z'
 attachments:
   - Screenshot 2026-06-25 at 16.39.07.png
 ---

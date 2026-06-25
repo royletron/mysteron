@@ -1,12 +1,12 @@
 ---
 title: Footer
-state: done
+state: bin
 priority: medium
 companionId: c1bf55fe-3e93-410d-94a7-cfde4dc1f80e
 assignee: Waldorf the Compiler
 labels: []
 created: '2026-06-23T21:53:05.086Z'
-updated: '2026-06-23T22:41:46.766Z'
+updated: '2026-06-25T16:45:25.733Z'
 ---
 
 Can we add a footer after the main content? Pop the name in, along with links to the github repo issues and stars. Could you also bake in the commit sha (will need to be done on build I guess). Make sure that the footer appears after the scroll, but no higher up the page than the bottom of the visible window (use dvh)

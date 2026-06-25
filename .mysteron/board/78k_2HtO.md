@@ -1,12 +1,12 @@
 ---
 title: Cleanup
-state: done
+state: bin
 priority: medium
 companionId: c1bf55fe-3e93-410d-94a7-cfde4dc1f80e
 assignee: Waldorf the Compiler
 labels: []
 created: '2026-06-23T22:00:17.426Z'
-updated: '2026-06-23T22:41:47.707Z'
+updated: '2026-06-25T16:45:25.736Z'
 ---
 
 After 48 hours of being in 'done' we need tickets to be moved into a 'bin' - create the bin page and add it as a tab. Maybe have a restore button...? We should also put a 'delete' button on tickets in any state

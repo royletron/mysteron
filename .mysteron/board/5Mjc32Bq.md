@@ -1,11 +1,11 @@
 ---
 title: UI Toggle Companion
-state: done
+state: bin
 priority: medium
 assignee: Waldorf the Compiler
 labels: []
 created: '2026-06-23T18:10:03.453Z'
-updated: '2026-06-23T21:39:56.932Z'
+updated: '2026-06-25T16:45:25.695Z'
 ---
 
 We should be able to toggle the type of companion we have - maybe 'regenerate them'.

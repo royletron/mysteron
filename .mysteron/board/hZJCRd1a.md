@@ -1,12 +1,12 @@
 ---
 title: Agent run
-state: done
+state: bin
 priority: medium
 companionId: c1bf55fe-3e93-410d-94a7-cfde4dc1f80e
 assignee: Waldorf the Compiler
 labels: []
 created: '2026-06-23T22:06:18.022Z'
-updated: '2026-06-23T22:41:49.657Z'
+updated: '2026-06-25T16:45:25.741Z'
 ---
 
 The back to board button on the agent run screen, can we pull it out of the card and put it at the bottom of the card - but still have it sticky?

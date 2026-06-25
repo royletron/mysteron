@@ -1,12 +1,12 @@
 ---
 title: Pulses
-state: done
+state: bin
 priority: medium
 companionId: c1bf55fe-3e93-410d-94a7-cfde4dc1f80e
 assignee: Waldorf the Compiler
 labels: []
 created: '2026-06-23T19:45:38.161Z'
-updated: '2026-06-23T21:40:00.119Z'
+updated: '2026-06-25T16:45:25.707Z'
 ---
 
 # Make it good!

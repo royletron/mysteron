@@ -1,12 +1,12 @@
 ---
 title: Add Agent Loading State
-state: done
+state: bin
 priority: medium
 companionId: c1bf55fe-3e93-410d-94a7-cfde4dc1f80e
 assignee: Waldorf the Compiler
 labels: []
 created: '2026-06-23T19:49:38.335Z'
-updated: '2026-06-23T22:41:43.008Z'
+updated: '2026-06-25T16:45:25.718Z'
 ---
 
 At the bottom of the agent log, could we have a pulsing avatar for the companion with little phrases

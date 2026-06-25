@@ -1,12 +1,12 @@
 ---
 title: Use Your Head
-state: done
+state: bin
 priority: medium
 companionId: c1bf55fe-3e93-410d-94a7-cfde4dc1f80e
 assignee: Waldorf the Compiler
 labels: []
 created: '2026-06-23T20:17:19.759Z'
-updated: '2026-06-23T22:41:44.991Z'
+updated: '2026-06-25T16:45:25.723Z'
 ---
 
 The top navbar isn't doing a massive amount. Can we maybe have a project selector in there, and some sort of breadcrumb as we navigate around?

@@ -1,12 +1,12 @@
 ---
 title: Everything is a Page
-state: done
+state: bin
 priority: medium
 companionId: c1bf55fe-3e93-410d-94a7-cfde4dc1f80e
 assignee: Waldorf the Compiler
 labels: []
 created: '2026-06-24T00:42:09.371Z'
-updated: '2026-06-25T16:21:36.866Z'
+updated: '2026-06-25T16:45:25.746Z'
 ---
 
 Can we make sure things like board tabs, and agent screens are all their own URL? I keep hitting back and ending up in random places.

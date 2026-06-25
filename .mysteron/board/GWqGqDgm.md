@@ -1,12 +1,12 @@
 ---
 title: Less rounding
-state: done
+state: bin
 priority: medium
 assignee: Waldorf the Compiler
 labels:
   - design
 created: '2026-06-23T16:52:30.545Z'
-updated: '2026-06-23T21:39:53.482Z'
+updated: '2026-06-25T16:45:25.659Z'
 ---
 
 Can we get rid of some of this corner radius stuff?
