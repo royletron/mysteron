@@ -7,8 +7,10 @@ import {
   type BranchInfo,
   type Commit,
   type Companion,
+  type OriginStatus,
   type ProjectConfig,
   type ProjectDetail,
+  type PushResult,
   type Recipe,
   type RunSummary,
   type Ticket,
@@ -668,6 +670,79 @@ export function CommitsTab({ detail }: { detail: ProjectDetail }) {
   );
 }
 
+// ---- Origin sync (how out of whack with origin, + push) -----------------
+/** "↑ N to push · ↓ M to pull", or an up-to-date tick. */
+function OriginSync({ s }: { s: OriginStatus }) {
+  const synced = s.ahead === 0 && s.behind === 0;
+  return (
+    <p class="mt-2 text-sm text-zinc-400">
+      <code>{s.branch}</code> vs <code>{s.upstream}</code>:{" "}
+      {synced ? (
+        <span class="text-emerald-400">up to date ✓</span>
+      ) : (
+        <span class="tabular-nums">
+          {s.ahead > 0 && <span class="text-amber-300">↑ {s.ahead} to push</span>}
+          {s.ahead > 0 && s.behind > 0 && <span class="text-zinc-600"> · </span>}
+          {s.behind > 0 && <span class="text-cyan-300">↓ {s.behind} to pull</span>}
+        </span>
+      )}
+    </p>
+  );
+}
+
+function OriginCard({ projectId }: { projectId: string }) {
+  const { data: s, loading, reload } = useAsync(() => api<OriginStatus>(`/api/projects/${projectId}/origin`), [projectId]);
+  const [pushing, setPushing] = useState(false);
+
+  const push = async () => {
+    setPushing(true);
+    try {
+      const res = await api<PushResult>(`/api/projects/${projectId}/push`, { method: "POST" });
+      pushToast(res.rebased ? `Pushed ${res.branch} (rebased onto origin first).` : `Pushed ${res.branch} to origin.`, "success");
+      reload();
+    } catch (e) {
+      pushToast((e as Error).message, "warn");
+    } finally {
+      setPushing(false);
+    }
+  };
+
+  const canPush = !!s?.branch && s.hasRemote;
+  return (
+    <div class="card mb-4">
+      <div class="flex items-center gap-2">
+        <h2 class="text-lg font-semibold">Origin</h2>
+        <div class="flex-1" />
+        <button class="btn btn-sm" disabled={loading} title="Refresh from origin" onClick={reload}>
+          ↻
+        </button>
+        <button class="btn btn-primary btn-sm" disabled={!canPush || pushing} onClick={push}>
+          {pushing ? "Pushing…" : "Push"}
+        </button>
+      </div>
+      {loading && !s ? (
+        <div class="pulse mt-2 text-sm text-zinc-500">Loading…</div>
+      ) : !s?.branch ? (
+        <div class="mt-2 text-sm text-zinc-500">Not on a branch (detached HEAD) — nothing to push.</div>
+      ) : !s.hasRemote ? (
+        <div class="mt-2 text-sm text-zinc-500">
+          No git remote configured — add an <code>origin</code> remote to push.
+        </div>
+      ) : !s.upstream ? (
+        <p class="mt-2 text-sm text-zinc-400">
+          <code>{s.branch}</code> isn't tracking <code>{s.remote}</code> yet — push to publish it.
+        </p>
+      ) : (
+        <OriginSync s={s} />
+      )}
+      <p class="mt-2 text-xs text-zinc-600">
+        Push sends the current branch to origin. If it's rejected because origin moved on, Mysteron rebases onto{" "}
+        <code>origin</code> and retries once.
+      </p>
+    </div>
+  );
+}
+
 // ---- Branches (PR-style review list) ------------------------------------
 export function BranchesTab({ detail }: { detail: ProjectDetail }) {
   const projectId = detail.entry.id;
@@ -708,71 +783,74 @@ export function BranchesTab({ detail }: { detail: ProjectDetail }) {
   };
 
   return (
-    <div class="card">
-      <h2 class="text-lg font-semibold">Open branches</h2>
-      <p class="text-sm text-zinc-400">
-        Work that landed on its own branch — guest runs under a new-branch recipe, or when the host's tree was busy.
-        Merge one into <code>{data?.current || "the current branch"}</code> when you're happy with it; pending board
-        changes are committed automatically. Merged branches are flagged so you can delete them here.
-      </p>
-      {loading && !data ? (
-        <div class="pulse mt-2 text-sm text-zinc-500">Loading…</div>
-      ) : branches.length === 0 ? (
-        <div class="mt-2 text-sm text-zinc-500">
-          No open branches — guest work either landed on the current branch or hasn't run yet.
-        </div>
-      ) : (
-        <div class="mt-3 flex flex-col gap-2">
-          {branches.map((b) => (
-            <div key={b.name} class="flex items-center gap-3 rounded-sm border border-zinc-800 p-2.5">
-              {b.companionRef ? (
-                <Avatar companion={b.companionRef} size={26} />
-              ) : (
-                <span class="inline-flex h-[26px] w-[26px] shrink-0 items-center justify-center text-zinc-500">⎇</span>
-              )}
-              <div class="min-w-0 flex-1">
-                <div class="flex items-center gap-2">
-                  <code class="truncate text-sm text-violet-300" title={b.name}>
-                    {b.name}
-                  </code>
-                  <span class="shrink-0 text-xs text-zinc-500">{b.shortHash}</span>
-                  {b.merged && (
-                    <span class="shrink-0 rounded-full bg-emerald-900/60 px-2 py-0.5 text-xs font-medium text-emerald-300">
-                      Merged
+    <div>
+      <OriginCard projectId={projectId} />
+      <div class="card">
+        <h2 class="text-lg font-semibold">Open branches</h2>
+        <p class="text-sm text-zinc-400">
+          Work that landed on its own branch — guest runs under a new-branch recipe, or when the host's tree was busy.
+          Merge one into <code>{data?.current || "the current branch"}</code> when you're happy with it; pending board
+          changes are committed automatically. Merged branches are flagged so you can delete them here.
+        </p>
+        {loading && !data ? (
+          <div class="pulse mt-2 text-sm text-zinc-500">Loading…</div>
+        ) : branches.length === 0 ? (
+          <div class="mt-2 text-sm text-zinc-500">
+            No open branches — guest work either landed on the current branch or hasn't run yet.
+          </div>
+        ) : (
+          <div class="mt-3 flex flex-col gap-2">
+            {branches.map((b) => (
+              <div key={b.name} class="flex items-center gap-3 rounded-sm border border-zinc-800 p-2.5">
+                {b.companionRef ? (
+                  <Avatar companion={b.companionRef} size={26} />
+                ) : (
+                  <span class="inline-flex h-[26px] w-[26px] shrink-0 items-center justify-center text-zinc-500">⎇</span>
+                )}
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-center gap-2">
+                    <code class="truncate text-sm text-violet-300" title={b.name}>
+                      {b.name}
+                    </code>
+                    <span class="shrink-0 text-xs text-zinc-500">{b.shortHash}</span>
+                    {b.merged && (
+                      <span class="shrink-0 rounded-full bg-emerald-900/60 px-2 py-0.5 text-xs font-medium text-emerald-300">
+                        Merged
+                      </span>
+                    )}
+                  </div>
+                  <div class="truncate text-xs text-zinc-400" title={b.subject}>
+                    {b.subject}
+                  </div>
+                  <div class="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-zinc-500">
+                    {b.companion && <span>{b.companion}</span>}
+                    <span>{fmtWhen(b.date)}</span>
+                    <span class="tabular-nums" title="ahead / behind the current branch">
+                      ↑{b.ahead} ↓{b.behind}
                     </span>
-                  )}
+                    <span>
+                      {b.filesChanged} file{b.filesChanged === 1 ? "" : "s"}
+                    </span>
+                  </div>
                 </div>
-                <div class="truncate text-xs text-zinc-400" title={b.subject}>
-                  {b.subject}
-                </div>
-                <div class="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-zinc-500">
-                  {b.companion && <span>{b.companion}</span>}
-                  <span>{fmtWhen(b.date)}</span>
-                  <span class="tabular-nums" title="ahead / behind the current branch">
-                    ↑{b.ahead} ↓{b.behind}
-                  </span>
-                  <span>
-                    {b.filesChanged} file{b.filesChanged === 1 ? "" : "s"}
-                  </span>
-                </div>
-              </div>
-              {!b.merged && (
-                <button class="btn btn-primary btn-sm shrink-0" disabled={busy === b.name} onClick={() => merge(b)}>
-                  {busy === b.name ? "…" : "Merge"}
+                {!b.merged && (
+                  <button class="btn btn-primary btn-sm shrink-0" disabled={busy === b.name} onClick={() => merge(b)}>
+                    {busy === b.name ? "…" : "Merge"}
+                  </button>
+                )}
+                <button
+                  class="btn btn-danger btn-sm shrink-0"
+                  disabled={busy === b.name}
+                  title={b.merged ? "Delete merged branch" : "Delete branch"}
+                  onClick={() => drop(b)}
+                >
+                  ✕
                 </button>
-              )}
-              <button
-                class="btn btn-danger btn-sm shrink-0"
-                disabled={busy === b.name}
-                title={b.merged ? "Delete merged branch" : "Delete branch"}
-                onClick={() => drop(b)}
-              >
-                ✕
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

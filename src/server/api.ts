@@ -44,7 +44,7 @@ import { createWorkerMcp } from "./worker-mcp.js";
 import type { WorkerRegistry } from "./workers.js";
 import type { GuestController } from "./guest-controller.js";
 import { loadSettings, verifyGuestToken } from "../core/settings.js";
-import { workingTreeRef, listBranches, currentBranch, mergeBranch, deleteBranch } from "../core/git.js";
+import { workingTreeRef, listBranches, currentBranch, mergeBranch, deleteBranch, originStatus, pushCurrentBranch } from "../core/git.js";
 
 interface ResolvedProject {
   entry: RegistryEntry;
@@ -345,6 +345,22 @@ export function registerApi(
     const result = await mergeBranch(r.entry.path, branch);
     if (!result.ok) return res.status(result.conflicted ? 409 : 400).json(result);
     res.json(result);
+  });
+
+  // How far the checked-out branch is ahead/behind origin (fetches first so the
+  // reading is fresh — best-effort, never blocks on an offline/auth'd remote).
+  app.get("/api/projects/:id/origin", async (req: Request, res: Response) => {
+    const r = await resolve(req.params.id);
+    if (!r) return notFound(res);
+    res.json(await originStatus(r.entry.path, { fetch: true }));
+  });
+
+  // Push the checked-out branch to origin; on rejection, pull --rebase then retry.
+  app.post("/api/projects/:id/push", async (req: Request, res: Response) => {
+    const r = await resolve(req.params.id);
+    if (!r) return notFound(res);
+    const result = await pushCurrentBranch(r.entry.path);
+    res.status(result.ok ? 200 : 400).json(result);
   });
 
   // Delete an open branch (e.g. after merging or discarding it).

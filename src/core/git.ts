@@ -418,3 +418,100 @@ export async function deleteBranch(root: string, branch: string): Promise<{ ok: 
     .then(() => ({ ok: true }))
     .catch((e) => ({ ok: false, error: (e as Error).message }));
 }
+
+export interface OriginStatus {
+  /** True when the repo has at least one remote configured. */
+  hasRemote: boolean;
+  /** The remote used for the comparison (`origin` if present, else the first remote). */
+  remote?: string;
+  /** The checked-out branch ("" if detached / not a repo). */
+  branch: string;
+  /** The upstream ref this branch tracks (e.g. `origin/main`), if any. */
+  upstream?: string;
+  /** Local commits not on the upstream — i.e. what a push would send. */
+  ahead: number;
+  /** Upstream commits not held locally — i.e. what a pull would bring in. */
+  behind: number;
+}
+
+/** Best-effort stderr/stdout from a failed git invocation, for surfacing to the user. */
+function gitErrorText(e: unknown): string {
+  const x = e as { stderr?: string; stdout?: string; message?: string };
+  return (x.stderr || x.stdout || x.message || String(e)).trim();
+}
+
+/**
+ * How far the checked-out branch is ahead/behind its origin tracking branch —
+ * the "out of whack with origin" reading. By default this uses the local refs
+ * (fast, offline-safe); pass `{ fetch: true }` to refresh from the remote first
+ * (best-effort: never prompts for credentials and is bounded by a timeout, so an
+ * offline/unauthenticated remote just leaves the last-known numbers in place).
+ */
+export async function originStatus(root: string, opts?: { fetch?: boolean }): Promise<OriginStatus> {
+  const branch = await currentBranch(root);
+  const git = (args: string[]) => exec("git", ["-C", root, ...args]);
+  const remotes = await git(["remote"])
+    .then(({ stdout }) => stdout.split("\n").map((s) => s.trim()).filter(Boolean))
+    .catch(() => [] as string[]);
+  const hasRemote = remotes.length > 0;
+  const remote = remotes.includes("origin") ? "origin" : remotes[0];
+  if (!branch || !hasRemote) return { hasRemote, remote, branch, ahead: 0, behind: 0 };
+
+  if (opts?.fetch) {
+    await exec("git", ["-C", root, "fetch", "--quiet", remote!], {
+      env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+      timeout: 10_000,
+    }).catch(() => undefined);
+  }
+
+  let upstream = await git(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"])
+    .then(({ stdout }) => stdout.trim())
+    .catch(() => "");
+  if (!upstream && (await refExists(root, `${remote}/${branch}`))) upstream = `${remote}/${branch}`;
+  if (!upstream) return { hasRemote, remote, branch, ahead: 0, behind: 0 };
+
+  const counts = await git(["rev-list", "--left-right", "--count", `${upstream}...HEAD`])
+    .then(({ stdout }) => stdout.trim().split(/\s+/).map(Number))
+    .catch(() => [0, 0]);
+  return { hasRemote, remote, branch, upstream, behind: counts[0] || 0, ahead: counts[1] || 0 };
+}
+
+export interface PushResult {
+  ok: boolean;
+  /** Whether we had to `pull --rebase` onto origin before the push went through. */
+  rebased: boolean;
+  branch: string;
+  error?: string;
+  /** Raw git output from the failing step, for display. */
+  output?: string;
+}
+
+/**
+ * Push the checked-out branch to origin. If the straight push is rejected (the
+ * branch is behind origin), rebase onto `origin/<branch>` and try once more —
+ * otherwise crap out, leaving the tree as it was (a failed rebase is aborted).
+ */
+export async function pushCurrentBranch(root: string): Promise<PushResult> {
+  const branch = await currentBranch(root);
+  if (!branch) return { ok: false, rebased: false, branch: "", error: "not on a branch (detached HEAD) — can't push" };
+  const git = (args: string[]) => exec("git", ["-C", root, ...args], { maxBuffer: 16 << 20, env: { ...process.env, GIT_TERMINAL_PROMPT: "0" } });
+
+  try {
+    await git(["push"]);
+    return { ok: true, rebased: false, branch };
+  } catch {
+    // Out of sync with origin — rebase our work on top of theirs, then retry.
+  }
+  try {
+    await git(["pull", "--rebase", "origin", branch]);
+  } catch (e) {
+    await git(["rebase", "--abort"]).catch(() => undefined);
+    return { ok: false, rebased: false, branch, error: `couldn't rebase ${branch} onto origin — resolve it locally`, output: gitErrorText(e) };
+  }
+  try {
+    await git(["push"]);
+    return { ok: true, rebased: true, branch };
+  } catch (e) {
+    return { ok: false, rebased: true, branch, error: `push of ${branch} failed even after rebasing onto origin`, output: gitErrorText(e) };
+  }
+}

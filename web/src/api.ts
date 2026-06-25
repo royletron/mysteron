@@ -229,6 +229,23 @@ export interface BranchInfo {
   merged: boolean;
 }
 
+export interface OriginStatus {
+  hasRemote: boolean;
+  remote?: string;
+  branch: string;
+  upstream?: string;
+  ahead: number;
+  behind: number;
+}
+
+export interface PushResult {
+  ok: boolean;
+  rebased: boolean;
+  branch: string;
+  error?: string;
+  output?: string;
+}
+
 export interface Recipe {
   id: string;
   name: string;

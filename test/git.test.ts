@@ -7,7 +7,7 @@ import { promisify } from "node:util";
 import { after, test } from "node:test";
 
 const exec = promisify(execFile);
-const { captureSnapshotRef, releaseSnapshotRef, landGuestPatch, listBranches, mergeBranch, deleteBranch, commitBoardChanges, unmergedBranchTicketIds, recentCommits } =
+const { captureSnapshotRef, releaseSnapshotRef, landGuestPatch, listBranches, mergeBranch, deleteBranch, commitBoardChanges, unmergedBranchTicketIds, recentCommits, originStatus, pushCurrentBranch } =
   await import("../src/core/git.js");
 
 const roots: string[] = [];
@@ -267,6 +267,117 @@ test("captureSnapshotRef captures the full working tree (incl. untracked, excl. 
 
   await releaseSnapshotRef(root, "r5");
   assert.equal(await refExists(root, "refs/mysteron/snap/r5"), false);
+});
+
+/** Give `root` a bare `origin` remote with its current branch pushed + tracked. */
+async function makeOrigin(root: string): Promise<{ bare: string; branch: string }> {
+  const bare = await fs.mkdtemp(path.join(os.tmpdir(), "mysteron-origin-"));
+  roots.push(bare);
+  await git(bare, "init", "--bare", "-q");
+  await git(root, "remote", "add", "origin", bare);
+  const branch = (await git(root, "symbolic-ref", "--short", "HEAD")).stdout.trim();
+  await git(root, "push", "-u", "-q", "origin", branch);
+  return { bare, branch };
+}
+
+/** Move `origin` on via a throwaway clone: commit `content` to `file` and push. */
+async function pushFromClone(bare: string, branch: string, file: string, content: string, msg = "remote work") {
+  const clone = await fs.mkdtemp(path.join(os.tmpdir(), "mysteron-clone-"));
+  roots.push(clone);
+  await git(clone, "clone", "-q", bare, ".");
+  await git(clone, "config", "user.name", "Remote");
+  await git(clone, "config", "user.email", "remote@local");
+  await git(clone, "checkout", "-q", branch);
+  await fs.writeFile(path.join(clone, file), content);
+  await git(clone, "add", "-A");
+  await git(clone, "commit", "-q", "-m", msg);
+  await git(clone, "push", "-q", "origin", branch);
+}
+
+test("originStatus reports ahead/behind against origin", async () => {
+  const root = await makeRepo();
+  const { branch } = await makeOrigin(root);
+
+  let s = await originStatus(root);
+  assert.equal(s.hasRemote, true);
+  assert.equal(s.remote, "origin");
+  assert.equal(s.branch, branch);
+  assert.equal(s.upstream, `origin/${branch}`);
+  assert.equal(s.ahead, 0);
+  assert.equal(s.behind, 0);
+
+  await fs.writeFile(path.join(root, "a.txt"), "local\n");
+  await git(root, "add", "-A");
+  await git(root, "commit", "-q", "-m", "local work");
+  s = await originStatus(root);
+  assert.equal(s.ahead, 1);
+  assert.equal(s.behind, 0);
+});
+
+test("originStatus({ fetch }) refreshes the behind-count from origin", async () => {
+  const root = await makeRepo();
+  const { bare, branch } = await makeOrigin(root);
+  await pushFromClone(bare, branch, "remote.txt", "remote\n");
+
+  assert.equal((await originStatus(root)).behind, 0); // stale local refs
+  const s = await originStatus(root, { fetch: true });
+  assert.equal(s.behind, 1);
+  assert.equal(s.ahead, 0);
+});
+
+test("originStatus on a repo with no remote", async () => {
+  const root = await makeRepo();
+  const s = await originStatus(root);
+  assert.equal(s.hasRemote, false);
+  assert.equal(s.upstream, undefined);
+  assert.equal(s.ahead, 0);
+  assert.equal(s.behind, 0);
+});
+
+test("pushCurrentBranch pushes the branch to origin", async () => {
+  const root = await makeRepo();
+  const { bare, branch } = await makeOrigin(root);
+  await fs.writeFile(path.join(root, "a.txt"), "local\n");
+  await git(root, "add", "-A");
+  await git(root, "commit", "-q", "-m", "local work");
+
+  const res = await pushCurrentBranch(root);
+  assert.equal(res.ok, true);
+  assert.equal(res.rebased, false);
+  assert.equal((await git(bare, "log", "-1", "--pretty=%s", branch)).stdout.trim(), "local work");
+  assert.equal((await originStatus(root)).ahead, 0);
+});
+
+test("pushCurrentBranch rebases onto origin then pushes when rejected", async () => {
+  const root = await makeRepo();
+  const { bare, branch } = await makeOrigin(root);
+  await pushFromClone(bare, branch, "remote.txt", "remote\n", "remote work"); // origin moves on (no conflict)
+  await fs.writeFile(path.join(root, "a.txt"), "local\n");
+  await git(root, "add", "-A");
+  await git(root, "commit", "-q", "-m", "local work");
+
+  const res = await pushCurrentBranch(root);
+  assert.equal(res.ok, true);
+  assert.equal(res.rebased, true);
+  const log = (await git(bare, "log", "--pretty=%s", branch)).stdout;
+  assert.match(log, /local work/);
+  assert.match(log, /remote work/);
+  assert.equal(await read(root, "remote.txt"), "remote\n"); // remote work pulled in locally too
+});
+
+test("pushCurrentBranch craps out (and aborts) when the rebase conflicts", async () => {
+  const root = await makeRepo();
+  const { bare, branch } = await makeOrigin(root);
+  await pushFromClone(bare, branch, "a.txt", "remote edit\n", "remote edits a"); // same file...
+  await fs.writeFile(path.join(root, "a.txt"), "local edit\n"); // ...same line → conflict
+  await git(root, "add", "-A");
+  await git(root, "commit", "-q", "-m", "local edits a");
+
+  const res = await pushCurrentBranch(root);
+  assert.equal(res.ok, false);
+  assert.match(res.error ?? "", /rebase/);
+  assert.equal((await git(root, "status", "--porcelain")).stdout.trim(), ""); // failed rebase aborted
+  assert.equal(await read(root, "a.txt"), "local edit\n"); // our commit intact
 });
 
 test("recentCommits flags Mysteron-authored commits and parses the companion trailer", async () => {
