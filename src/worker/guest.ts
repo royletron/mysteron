@@ -8,6 +8,7 @@ import { promisify } from "node:util";
 import WebSocket from "ws";
 import type { DispatchMsg, HostMsg } from "../core/worker-protocol.js";
 import { renderStreamEvent, runResultStats } from "../runner/manager.js";
+import { GuestTui } from "./guest-tui.js";
 
 const pexec = promisify(execFile);
 
@@ -29,6 +30,35 @@ export interface GuestStatus {
   expiresAt?: string;
   message?: string;
   activeRuns: number;
+}
+
+/** A dispatched run starting on this guest. */
+export interface GuestRunStart {
+  runId: string;
+  ticketId: string;
+  ticketTitle: string;
+}
+
+/** Live agent output for a run, mirrored locally for the guest's own view. */
+export interface GuestRunLine {
+  runId: string;
+  stream: "stdout" | "stderr" | "system";
+  text: string;
+}
+
+/** Running/final cost + turn stats for a run. */
+export interface GuestRunStats {
+  runId: string;
+  costUsd?: number;
+  numTurns?: number;
+}
+
+/** A dispatched run finishing on this guest. */
+export interface GuestRunDone {
+  runId: string;
+  status: "done" | "failed" | "stopped";
+  costUsd?: number;
+  numTurns?: number;
 }
 
 /** http(s)://host → ws(s)://host/worker */
@@ -66,6 +96,11 @@ export class GuestConnection {
 
   /** Called whenever the status changes (for live UI / logging). */
   onChange?: (status: GuestStatus) => void;
+  /** Run lifecycle hooks, mirrored locally so the guest can render its own live view. */
+  onRunStart?: (run: GuestRunStart) => void;
+  onRunLine?: (line: GuestRunLine) => void;
+  onRunStats?: (stats: GuestRunStats) => void;
+  onRunDone?: (done: GuestRunDone) => void;
 
   constructor(opts: GuestOptions) {
     if (!opts.token) throw new Error("a guest token is required (get it from the host's Settings)");
@@ -179,8 +214,13 @@ export class GuestConnection {
   private async runDispatch(socket: WebSocket, msg: DispatchMsg): Promise<void> {
     this.active++;
     this.onChange?.(this.status());
+    this.onRunStart?.({ runId: msg.runId, ticketId: msg.ticketId, ticketTitle: msg.ticketTitle });
     try {
-      await handleDispatch(socket, msg, this.hostUrl, this.token);
+      const result = await handleDispatch(socket, msg, this.hostUrl, this.token, {
+        line: (stream, text) => this.onRunLine?.({ runId: msg.runId, stream, text }),
+        stats: (costUsd, numTurns) => this.onRunStats?.({ runId: msg.runId, costUsd, numTurns }),
+      });
+      this.onRunDone?.({ runId: msg.runId, ...result });
     } finally {
       this.active = Math.max(0, this.active - 1);
       this.onChange?.(this.status());
@@ -191,10 +231,26 @@ export class GuestConnection {
 /** CLI entry: offer this machine and stay up until the window elapses or Ctrl-C. */
 export async function joinHost(opts: GuestOptions): Promise<void> {
   const conn = new GuestConnection(opts);
-  conn.onChange = (s) => {
-    if (s.message) console.log(`[guest] ${s.message}`);
-    if (s.state === "offered") console.log("[guest] Waiting for work… (Ctrl-C to withdraw)");
-  };
+
+  // On an interactive terminal, drive a live dashboard; otherwise (pipes, CI,
+  // logs) fall back to plain one-line-per-event logging so output stays grep-able.
+  let tui: GuestTui | undefined;
+  if (process.stdout.isTTY) {
+    tui = new GuestTui(conn);
+    tui.start();
+  } else {
+    conn.onChange = (s) => {
+      if (s.message) console.log(`[guest] ${s.message}`);
+      if (s.state === "offered") console.log("[guest] Waiting for work… (Ctrl-C to withdraw)");
+    };
+    conn.onRunStart = (r) => console.log(`[guest] ▶ ${r.ticketTitle}`);
+    conn.onRunDone = (d) =>
+      console.log(
+        `[guest] ${d.status === "done" ? "✓" : "✖"} ${d.status}` +
+          `${d.numTurns != null ? ` · ${d.numTurns} turns` : ""}${d.costUsd != null ? ` · $${d.costUsd.toFixed(4)}` : ""}`,
+      );
+  }
+
   process.on("SIGINT", () => conn.stop("Stopped — offer withdrawn."));
   conn.start();
 
@@ -207,6 +263,7 @@ export async function joinHost(opts: GuestOptions): Promise<void> {
     }, 500);
     check.unref?.();
   });
+  tui?.stop();
 }
 
 // --- dispatched-ticket execution -------------------------------------------
@@ -291,9 +348,22 @@ function runClaude(
  * on it, and return a git diff of the result. A throwaway local git repo is the
  * diff engine — no shared remote needed.
  */
-async function handleDispatch(socket: WebSocket, msg: DispatchMsg, hostUrl: string, token: string): Promise<void> {
-  const line: LineFn = (stream, text) =>
+interface DispatchObserver {
+  line?: LineFn;
+  stats?: (costUsd?: number, numTurns?: number) => void;
+}
+
+async function handleDispatch(
+  socket: WebSocket,
+  msg: DispatchMsg,
+  hostUrl: string,
+  token: string,
+  observer?: DispatchObserver,
+): Promise<{ status: "done" | "failed"; costUsd?: number; numTurns?: number }> {
+  const line: LineFn = (stream, text) => {
     socket.send(JSON.stringify({ t: "run-line", runId: msg.runId, stream, text }));
+    observer?.line?.(stream, text);
+  };
   const workdir = path.join(os.tmpdir(), `mysteron-guest-${msg.runId}`);
   const git = (args: string[]) => pexec("git", ["-C", workdir, ...args], { maxBuffer: 64 << 20 });
 
@@ -333,6 +403,7 @@ async function handleDispatch(socket: WebSocket, msg: DispatchMsg, hostUrl: stri
       (c, n) => {
         costUsd = c;
         numTurns = n;
+        observer?.stats?.(c, n);
       },
       mcpUrl,
       token,
@@ -361,4 +432,5 @@ async function handleDispatch(socket: WebSocket, msg: DispatchMsg, hostUrl: stri
     await fs.rm(workdir, { recursive: true, force: true }).catch(() => undefined);
     socket.send(JSON.stringify({ t: "run-done", runId: msg.runId, status, exitCode, patchBase64, commitMessage, costUsd, numTurns }));
   }
+  return { status, costUsd, numTurns };
 }
