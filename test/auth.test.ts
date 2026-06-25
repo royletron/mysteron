@@ -7,9 +7,16 @@ import { after, test } from "node:test";
 const tmp = path.join(os.tmpdir(), `mysteron-auth-${process.pid}`);
 process.env.MYSTERON_HOME = path.join(tmp, "home");
 
-const { loadSettings, setPassword, setAuthEnabled, verifyPassword, authActive } = await import(
-  "../src/core/settings.js"
-);
+const {
+  loadSettings,
+  setPassword,
+  setAuthEnabled,
+  verifyPassword,
+  authActive,
+  mintGuestToken,
+  clearGuestToken,
+  verifyGuestToken,
+} = await import("../src/core/settings.js");
 
 test("fresh install: protection off, nothing set", async () => {
   const s = await loadSettings();
@@ -46,6 +53,27 @@ test("toggle off keeps the hash; toggle on requires a password", async () => {
   assert.ok(s.auth.hash, "hash retained while disabled");
   s = await setAuthEnabled(true);
   assert.equal(authActive(s), true);
+});
+
+test("guest token: mint → verify → clear", async () => {
+  const { token } = await mintGuestToken();
+  assert.ok(token && token.length >= 16);
+  let s = await loadSettings();
+  assert.equal(verifyGuestToken(s, token), true);
+  assert.equal(verifyGuestToken(s, "not-the-token"), false);
+  await clearGuestToken();
+  s = await loadSettings();
+  assert.equal(verifyGuestToken(s, token), false);
+});
+
+test("parseDuration handles units and defaults to minutes", async () => {
+  const { parseDuration } = await import("../src/core/worker-protocol.js");
+  assert.equal(parseDuration("90s"), 90_000);
+  assert.equal(parseDuration("30m"), 30 * 60_000);
+  assert.equal(parseDuration("2h"), 2 * 3_600_000);
+  assert.equal(parseDuration("1d"), 86_400_000);
+  assert.equal(parseDuration("5"), 5 * 60_000); // bare number → minutes
+  assert.equal(parseDuration("nope"), undefined);
 });
 
 after(async () => {

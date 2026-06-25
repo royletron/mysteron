@@ -23,8 +23,14 @@ export interface AuthSettings {
   id?: string;
 }
 
+export interface GuestSettings {
+  /** Shared token a guest must present to offer their machine as a worker. */
+  token?: string;
+}
+
 export interface AppSettings {
   auth: AuthSettings;
+  guest?: GuestSettings;
 }
 
 function settingsPath(): string {
@@ -34,9 +40,9 @@ function settingsPath(): string {
 export async function loadSettings(): Promise<AppSettings> {
   try {
     const parsed = JSON.parse(await fs.readFile(settingsPath(), "utf8")) as Partial<AppSettings>;
-    return { auth: { enabled: false, ...(parsed.auth ?? {}) } };
+    return { auth: { enabled: false, ...(parsed.auth ?? {}) }, guest: parsed.guest ?? {} };
   } catch {
-    return { auth: { enabled: false } };
+    return { auth: { enabled: false }, guest: {} };
   }
 }
 
@@ -85,4 +91,29 @@ export function verifyPassword(s: AppSettings, password: string): boolean {
 /** Protection is actively gating requests (enabled AND fully configured). */
 export function authActive(s: AppSettings): boolean {
   return Boolean(s.auth.enabled && s.auth.hash && s.auth.id);
+}
+
+// --- Guest worker join token -----------------------------------------------
+
+export async function mintGuestToken(): Promise<{ settings: AppSettings; token: string }> {
+  const s = await loadSettings();
+  const token = randomBytes(18).toString("base64url");
+  s.guest = { token };
+  await saveSettings(s);
+  return { settings: s, token };
+}
+
+export async function clearGuestToken(): Promise<AppSettings> {
+  const s = await loadSettings();
+  s.guest = {};
+  await saveSettings(s);
+  return s;
+}
+
+export function verifyGuestToken(s: AppSettings, token: string): boolean {
+  const t = s.guest?.token;
+  if (!t || !token) return false;
+  const a = Buffer.from(t);
+  const b = Buffer.from(token);
+  return a.length === b.length && timingSafeEqual(a, b);
 }

@@ -35,6 +35,7 @@ import { type RunManager, runSummary, CompanionBusyError } from "../runner/manag
 import type { Autopilot } from "../runner/autopilot.js";
 import type { RunEvent } from "../core/events.js";
 import { registerAuth } from "./auth.js";
+import type { WorkerRegistry } from "./workers.js";
 
 interface ResolvedProject {
   entry: RegistryEntry;
@@ -71,6 +72,7 @@ export function registerApi(
   watcher: ProjectWatcher,
   runs: RunManager,
   autopilot: Autopilot,
+  workers: WorkerRegistry,
   opts: ApiOptions = {},
 ): void {
   const verbose = opts.verbose ?? false;
@@ -107,6 +109,11 @@ export function registerApi(
   // and exposes the login/logout/settings endpoints. Registered before the
   // project routes so the gate runs first.
   registerAuth(app);
+
+  // --- Guest workers -------------------------------------------------------
+  app.get("/api/workers", (_req: Request, res: Response) => {
+    res.json({ workers: workers.list() });
+  });
 
   // --- Projects ------------------------------------------------------------
   app.get("/api/projects", async (_req: Request, res: Response) => {

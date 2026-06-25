@@ -226,6 +226,21 @@ export const login = (password: string) =>
   api<{ ok: boolean }>("/api/auth/login", { method: "POST", body: JSON.stringify({ password }) });
 export const logout = () => api<{ ok: boolean }>("/api/auth/logout", { method: "POST" });
 
+export interface GuestWorker {
+  id: string;
+  label: string;
+  capacity: number;
+  connectedAt: string;
+  lastSeen: string;
+  expiresAt: string;
+  status: "idle" | "busy";
+}
+
+export const getWorkers = () => api<{ workers: GuestWorker[] }>("/api/workers");
+export const getGuestToken = () => api<{ token: string | null }>("/api/settings/guest");
+export const mintGuestToken = () => api<{ token: string }>("/api/settings/guest", { method: "POST" });
+export const revokeGuestToken = () => api<{ ok: boolean }>("/api/settings/guest", { method: "DELETE" });
+
 // ---- shared display constants -------------------------------------------
 export const STATE_LABELS: Record<TicketState, string> = {
   backlog: "Backlog",

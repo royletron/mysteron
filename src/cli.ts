@@ -14,6 +14,8 @@ import { initProject } from "./core/project.js";
 import { registerProject } from "./core/registry.js";
 import { startStdioMcp } from "./mcp/server.js";
 import { serve } from "./server/index.js";
+import { joinHost } from "./worker/guest.js";
+import { parseDuration } from "./core/worker-protocol.js";
 
 type Flags = Record<string, string | boolean>;
 
@@ -60,6 +62,8 @@ Usage:
   mysteron mcp [id|path]                           Run the MCP server (stdio) for a project
   mysteron ticket list <id|path>                   List a project's tickets
   mysteron ticket add <id|path> <title...>         Add a ticket (to backlog)
+  mysteron join <host-url> --token <t> [--for 2h] [--name <label>] [--capacity 1]
+                                                 Offer this machine as a guest worker to a host
   mysteron help                                    Show this help
 `;
 
@@ -155,6 +159,17 @@ async function main(): Promise<void> {
       // Important: no stdout noise — stdio is the MCP transport.
       const root = await resolveRoot(positionals[0]);
       await startStdioMcp(root);
+      break;
+    }
+    case "join": {
+      if (!positionals[0]) throw new Error("join requires a host URL, e.g. mysteron join https://host --token <t>");
+      await joinHost({
+        hostUrl: positionals[0],
+        token: typeof flags.token === "string" ? flags.token : undefined,
+        label: typeof flags.name === "string" ? flags.name : undefined,
+        forMs: typeof flags.for === "string" ? parseDuration(flags.for) : undefined,
+        capacity: typeof flags.capacity === "string" ? Number(flags.capacity) : undefined,
+      });
       break;
     }
     case "ticket": {

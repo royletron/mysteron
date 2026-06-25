@@ -49,6 +49,11 @@ class MysteronBus extends EventEmitter {
   emitAutopilot(evt: Omit<AutopilotEvent, "at">): void {
     this.emit("autopilot", { ...evt, at: new Date().toISOString() } satisfies AutopilotEvent);
   }
+
+  /** The set of connected guest workers changed (connect/expire/disconnect). */
+  emitWorkers(): void {
+    this.emit("workers", { type: "workers-changed", at: new Date().toISOString() });
+  }
 }
 
 export const bus = new MysteronBus();

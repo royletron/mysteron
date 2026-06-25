@@ -5,6 +5,8 @@ import {
   setPassword,
   verifyPassword,
   authActive,
+  mintGuestToken,
+  clearGuestToken,
 } from "../core/settings.js";
 
 const COOKIE = "mysteron_auth";
@@ -102,5 +104,21 @@ export function registerAuth(app: Express): void {
       return res.status(400).json({ error: "Provide a password or an enabled flag." });
     }
     res.json({ auth: await publicStatus(req) });
+  });
+
+  // --- Guest worker join token (gated; the host operator manages it) -------
+  app.get("/api/settings/guest", async (_req: Request, res: Response) => {
+    const s = await loadSettings();
+    res.json({ token: s.guest?.token ?? null });
+  });
+
+  app.post("/api/settings/guest", async (_req: Request, res: Response) => {
+    const { token } = await mintGuestToken();
+    res.json({ token });
+  });
+
+  app.delete("/api/settings/guest", async (_req: Request, res: Response) => {
+    await clearGuestToken();
+    res.json({ ok: true });
   });
 }

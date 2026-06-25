@@ -40,8 +40,10 @@ export function setupWebSocket(server: Server, runs: RunManager, verbose = false
       if (c.runs.has(evt.runId)) send(c.socket, { channel: "run", evt });
     }
   };
+  const onWorkers = (evt: { type: string; at: string }) => broadcast({ channel: "global", evt });
   bus.on("mysteron", onMysteron);
   bus.on("autopilot", onAutopilot);
+  bus.on("workers", onWorkers);
   bus.on("run", onRun);
 
   interface Client {
