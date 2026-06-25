@@ -39,6 +39,14 @@ export interface RunDoneMsg {
   exitCode: number | null;
   /** Base64 of a `git diff --binary` from the snapshot to the agent's result. */
   patchBase64?: string;
+  /**
+   * The commit message(s) the agent itself wrote in the guest's throwaway repo
+   * (full `%B` of every commit it made, in order). The host lands the squashed
+   * diff under this message so the agent's own wording — conventional-commit
+   * style, emoji, trailers from the companion role — survives. Absent when the
+   * agent committed nothing (the host then falls back to the ticket title).
+   */
+  commitMessage?: string;
   costUsd?: number;
   numTurns?: number;
 }

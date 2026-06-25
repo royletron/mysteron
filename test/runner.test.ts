@@ -11,7 +11,7 @@ process.env.MYSTERON_AGENT_CMD = 'echo "handling: $MYSTERON_TICKET_TITLE"; echo 
 
 const { initProject } = await import("../src/core/project.js");
 const { createTicket, getTicket } = await import("../src/core/board.js");
-const { RunManager, renderStreamEvent, runResultStats, resolveCommand, buildPrompt, agentBinary, agentAvailable, agentUnavailableMessage } = await import("../src/runner/manager.js");
+const { RunManager, renderStreamEvent, runResultStats, resolveCommand, buildPrompt, agentBinary, agentAvailable, agentUnavailableMessage, guestLandMessage } = await import("../src/runner/manager.js");
 const { runsDir } = await import("../src/core/paths.js");
 
 const promptConfig = (recipe?: string) =>
@@ -282,6 +282,28 @@ test("a finished run is persisted to disk and survives a restart", async () => {
   assert.equal(restored?.logAvailable, true);
   assert.ok(restored?.lines.some((l) => l.text.includes("did the work")));
   assert.equal(fresh.listByProject(config.id)[0]?.id, run.id);
+});
+
+test("guestLandMessage keeps the agent's own commit message (with emoji/conventional style)", () => {
+  const agentMsg = "feat: add cloud companions ✨\n\nWire it all up.\n\nMysteron-Companion: Waldorf the Compiler";
+  const { message, trailer } = guestLandMessage(agentMsg, "Cloud Companions", "Waldorf the Compiler");
+  assert.equal(message, agentMsg);
+  // The agent already wrote the attribution trailer — don't duplicate it.
+  assert.equal(trailer, undefined);
+});
+
+test("guestLandMessage appends the trailer when the agent omitted it", () => {
+  const { message, trailer } = guestLandMessage("fix: tidy up 🐛", "Cloud Companions", "Waldorf the Compiler");
+  assert.equal(message, "fix: tidy up 🐛");
+  assert.equal(trailer, "Mysteron-Companion: Waldorf the Compiler");
+});
+
+test("guestLandMessage falls back to the ticket title when the agent committed nothing", () => {
+  for (const empty of [undefined, "", "   "]) {
+    const { message, trailer } = guestLandMessage(empty, "Cloud Companions", "Waldorf the Compiler");
+    assert.equal(message, "Cloud Companions");
+    assert.equal(trailer, "Mysteron-Companion: Waldorf the Compiler");
+  }
 });
 
 test("hydrate marks runs orphaned by a crashed process as stopped", async () => {

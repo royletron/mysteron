@@ -301,6 +301,7 @@ async function handleDispatch(socket: WebSocket, msg: DispatchMsg, hostUrl: stri
   let status: "done" | "failed" = "failed";
   let exitCode: number | null = null;
   let patchBase64: string | undefined;
+  let commitMessage: string | undefined;
   let costUsd: number | undefined;
   let numTurns: number | undefined;
 
@@ -331,8 +332,18 @@ async function handleDispatch(socket: WebSocket, msg: DispatchMsg, hostUrl: stri
       token,
     );
 
+    // Preserve the agent's own commit message(s) before flattening to a diff, so
+    // the host can land the work under the wording the companion role asked for
+    // (conventional commits, emoji, trailers) rather than a generic ticket title.
+    const agentCommits = Number((await git(["rev-list", "--count", `${base}..HEAD`])).stdout.trim()) || 0;
+    if (agentCommits > 0) {
+      commitMessage = (await git(["log", "--format=%B", "--reverse", `${base}..HEAD`])).stdout.trim() || undefined;
+    }
+
+    // Capture anything the agent left uncommitted so the returned diff is complete.
     await git(["add", "-A"]);
-    await git([...id, "commit", "-q", "-m", "work", "--allow-empty"]);
+    const pending = (await git(["diff", "--cached", "--name-only"])).stdout.trim();
+    if (pending) await git([...id, "commit", "-q", "-m", agentCommits > 0 ? "chore: capture uncommitted changes" : "work"]);
     const { stdout: patch } = await git(["diff", "--binary", base, "HEAD"]);
     patchBase64 = Buffer.from(patch, "utf8").toString("base64");
     status = exitCode === 0 ? "done" : "failed";
@@ -342,6 +353,6 @@ async function handleDispatch(socket: WebSocket, msg: DispatchMsg, hostUrl: stri
     status = "failed";
   } finally {
     await fs.rm(workdir, { recursive: true, force: true }).catch(() => undefined);
-    socket.send(JSON.stringify({ t: "run-done", runId: msg.runId, status, exitCode, patchBase64, costUsd, numTurns }));
+    socket.send(JSON.stringify({ t: "run-done", runId: msg.runId, status, exitCode, patchBase64, commitMessage, costUsd, numTurns }));
   }
 }

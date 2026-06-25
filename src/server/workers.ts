@@ -8,6 +8,8 @@ export interface GuestRunResult {
   status: "done" | "failed" | "stopped";
   exitCode: number | null;
   patchBase64?: string;
+  /** The commit message(s) the guest agent wrote, so the host lands under its own wording. */
+  commitMessage?: string;
   costUsd?: number;
   numTurns?: number;
 }
@@ -163,6 +165,7 @@ export class WorkerRegistry {
             status: msg.status,
             exitCode: msg.exitCode,
             patchBase64: msg.patchBase64,
+            commitMessage: msg.commitMessage,
             costUsd: msg.costUsd,
             numTurns: msg.numTurns,
           });

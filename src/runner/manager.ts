@@ -348,6 +348,25 @@ export function buildPrompt(
 }
 
 /**
+ * Choose how a guest's returned work should be committed on the host. Prefers the
+ * commit message the agent wrote itself (it ran under the companion role, so it
+ * already follows the project's commit conventions — wording, emoji, trailers);
+ * falls back to the ticket title only when the guest agent committed nothing of
+ * its own. The attribution trailer is omitted when the agent already included it,
+ * so it's never duplicated. Exported for testing.
+ */
+export function guestLandMessage(
+  agentMessage: string | undefined,
+  ticketTitle: string,
+  companion: string,
+): { message: string; trailer?: string } {
+  const agentMsg = agentMessage?.trim();
+  const trailer = `Mysteron-Companion: ${companion}`;
+  if (!agentMsg) return { message: ticketTitle, trailer };
+  return { message: agentMsg, trailer: /Mysteron-Companion:/i.test(agentMsg) ? undefined : trailer };
+}
+
+/**
  * Spawns and supervises agent runs, buffering their output and broadcasting it
  * over the event bus so the web UI can show a live view of an agent working a
  * ticket. Runs are kept in memory for the life of the server process.
@@ -690,12 +709,13 @@ export class RunManager {
       // onto the current branch, or a dedicated one (see landGuestPatch).
       const config = await loadProjectConfig(run.projectRoot);
       const git = (config && findRecipe(config.recipe)?.git) ?? { strategy: "current-branch" as const };
+      const { message, trailer } = guestLandMessage(result.commitMessage, run.ticketTitle, run.companion);
       const res = await landGuestPatch(run.projectRoot, {
         runId: run.id,
         ticketId: run.ticketId,
         patch,
-        message: run.ticketTitle,
-        trailer: `Mysteron-Companion: ${run.companion}`,
+        message,
+        trailer,
         strategy: git.strategy,
         branchPrefix: git.branchPrefix,
       });
