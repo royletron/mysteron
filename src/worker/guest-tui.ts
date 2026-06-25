@@ -1,3 +1,4 @@
+import { createLogUpdate } from "log-update";
 import type { GuestQuota } from "../core/worker-protocol.js";
 import type {
   GuestConnection,
@@ -185,12 +186,18 @@ export function renderFrame(v: GuestView, opts: RenderOpts): string {
  * connection's lifecycle hooks, keeps a small per-run log tail, and redraws on a
  * timer. Use this only on an interactive TTY; pipe-friendly logging lives in the
  * `join` CLI fallback.
+ *
+ * Repainting (cursor management, erasing the previous frame, clipping to the
+ * terminal height, and flicker-free diffed writes) is delegated to `log-update`,
+ * which handles the awkward cases — frames taller than the window, resizes,
+ * wrapped lines — that a hand-rolled cursor-up redraw got wrong.
  */
 export class GuestTui {
   private readonly conn: GuestConnection;
   private readonly stream: NodeJS.WriteStream;
   private readonly color: boolean;
   private readonly maxTail: number;
+  private readonly log: ReturnType<typeof createLogUpdate>;
 
   private status?: GuestStatus;
   private readonly runs = new Map<string, RunCard>();
@@ -198,7 +205,6 @@ export class GuestTui {
   private readonly startedAt = Date.now();
 
   private frame = 0;
-  private linesDrawn = 0;
   private timer?: ReturnType<typeof setInterval>;
 
   constructor(conn: GuestConnection, stream: NodeJS.WriteStream = process.stdout, maxTail = 50) {
@@ -206,6 +212,7 @@ export class GuestTui {
     this.stream = stream;
     this.maxTail = maxTail;
     this.color = !process.env.NO_COLOR;
+    this.log = createLogUpdate(stream);
   }
 
   start(): void {
@@ -236,7 +243,6 @@ export class GuestTui {
       if (d.numTurns) this.totals.turns += d.numTurns;
     };
 
-    this.stream.write(`${ESC}?25l`); // hide cursor
     this.timer = setInterval(() => this.paint(), 90);
     this.timer.unref?.();
   }
@@ -265,10 +271,7 @@ export class GuestTui {
       frame: this.frame++,
       color: this.color,
     });
-    if (this.linesDrawn) this.stream.write(`${ESC}${this.linesDrawn}A`);
-    this.stream.write(`${ESC}0J`); // clear from cursor down
-    this.stream.write(text);
-    this.linesDrawn = text.split("\n").length - 1;
+    this.log(text);
   }
 
   /** Stop repainting, restore the cursor, and leave a final frame on screen. */
@@ -276,6 +279,6 @@ export class GuestTui {
     if (this.timer) clearInterval(this.timer);
     this.timer = undefined;
     this.paint();
-    this.stream.write(`\n${ESC}?25h`); // newline + show cursor
+    this.log.done(); // persist the final frame and restore the cursor
   }
 }
