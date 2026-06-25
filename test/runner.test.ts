@@ -11,7 +11,7 @@ process.env.MYSTERON_AGENT_CMD = 'echo "handling: $MYSTERON_TICKET_TITLE"; echo 
 
 const { initProject } = await import("../src/core/project.js");
 const { createTicket, getTicket } = await import("../src/core/board.js");
-const { RunManager, renderStreamEvent, runResultStats, resolveCommand, buildPrompt } = await import("../src/runner/manager.js");
+const { RunManager, renderStreamEvent, runResultStats, resolveCommand, buildPrompt, agentBinary, agentAvailable, agentUnavailableMessage } = await import("../src/runner/manager.js");
 const { runsDir } = await import("../src/core/paths.js");
 
 const promptConfig = (recipe?: string) =>
@@ -172,6 +172,39 @@ test("buildPrompt embeds the recipe's git behaviour and team", () => {
   assert.match(imgPrompt, /# Attached images/);
   assert.match(imgPrompt, /\.mysteron\/board\/attachments\/T1\/bug\.png/);
   assert.ok(!buildPrompt(promptConfig(), promptTicket, "", "").includes("# Attached images"));
+});
+
+test("agentAvailable reports whether a ticket can actually be run locally", () => {
+  const saved = process.env.MYSTERON_AGENT_CMD;
+  const savedPath = process.env.PATH;
+  try {
+    // A shell command (MYSTERON_AGENT_CMD) can't be introspected → assumed available.
+    process.env.MYSTERON_AGENT_CMD = 'echo "hi"';
+    assert.equal(agentBinary(promptConfig()), null);
+    assert.equal(agentAvailable(promptConfig()), true);
+
+    delete process.env.MYSTERON_AGENT_CMD;
+    // Default agent is the `claude` binary…
+    assert.equal(agentBinary(promptConfig()), "claude");
+    // …which is not found on an empty PATH, so nothing is available to run.
+    process.env.PATH = "";
+    assert.equal(agentAvailable(promptConfig()), false);
+    assert.match(agentUnavailableMessage(promptConfig()), /claude/i);
+
+    // A configured agent command is checked by name, and named in its message.
+    const missing = { ...promptConfig(), agent: { command: "definitely-not-a-real-binary-xyz" } } as any;
+    assert.equal(agentBinary(missing), "definitely-not-a-real-binary-xyz");
+    assert.equal(agentAvailable(missing), false);
+    assert.match(agentUnavailableMessage(missing), /definitely-not-a-real-binary-xyz/);
+
+    // An explicit path that exists (node itself) is available regardless of PATH.
+    const byPath = { ...promptConfig(), agent: { command: process.execPath } } as any;
+    assert.equal(agentAvailable(byPath), true);
+  } finally {
+    if (saved !== undefined) process.env.MYSTERON_AGENT_CMD = saved;
+    else delete process.env.MYSTERON_AGENT_CMD;
+    if (savedPath !== undefined) process.env.PATH = savedPath;
+  }
 });
 
 test("runResultStats reads cost + turns from a result event", () => {

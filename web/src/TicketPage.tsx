@@ -40,6 +40,9 @@ export function TicketPage({
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [lines, setLines] = useState<RunLine[]>([]);
   const [liveStatus, setLiveStatus] = useState<{ status: RunStatus; exitCode?: number | null } | null>(null);
+  // Why the last run attempt couldn't start (e.g. no agent installed, usage
+  // maxed out). Shown as a persistent banner so a failed click isn't silent.
+  const [startError, setStartError] = useState<string | null>(null);
   // Mobile: whether the expanded "details" drawer is open.
   const [infoOpen, setInfoOpen] = useState(false);
 
@@ -49,8 +52,11 @@ export function TicketPage({
     if (!autostart) return;
     window.history.replaceState(null, "", `#/project/${projectId}/ticket/${ticketId}`);
     api(`/api/projects/${projectId}/tickets/${ticketId}/run`, { method: "POST" })
-      .then(() => setRefresh((n) => n + 1))
-      .catch((e) => alert(`Could not start agent: ${(e as Error).message}`));
+      .then(() => {
+        setStartError(null);
+        setRefresh((n) => n + 1);
+      })
+      .catch((e) => setStartError((e as Error).message));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -147,10 +153,11 @@ export function TicketPage({
   const startRun = async () => {
     try {
       await api(`/api/projects/${projectId}/tickets/${ticketId}/run`, { method: "POST" });
+      setStartError(null);
       setSelectedRunId(null);
       setRefresh((n) => n + 1);
     } catch (e) {
-      alert((e as Error).message);
+      setStartError((e as Error).message);
     }
   };
   const stopRun = async () => {
@@ -329,6 +336,18 @@ export function TicketPage({
         </div>
 
         <div class="card">
+          {startError && (
+            <div class="mb-3 flex items-start gap-2 rounded-sm border border-red-500/50 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+              <span aria-hidden>⚠</span>
+              <div class="flex-1">
+                <div class="font-medium">Couldn't start a run</div>
+                <div class="text-red-300/90">{startError}</div>
+              </div>
+              <button class="btn btn-sm" onClick={() => setStartError(null)} aria-label="Dismiss">
+                ✕
+              </button>
+            </div>
+          )}
           <div class="mb-1.5 text-xs text-zinc-500">Live agent output</div>
           <div class="min-h-[52vh] rounded-sm border border-zinc-800 bg-black/70 p-3">
             {selectedRun && selectedRun.logAvailable === false ? (

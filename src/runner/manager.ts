@@ -1,5 +1,5 @@
 import { type ChildProcess, spawn } from "node:child_process";
-import { promises as fs } from "node:fs";
+import { promises as fs, accessSync, constants as FS } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { nanoid } from "nanoid";
@@ -175,6 +175,54 @@ export function resolveCommand(
       (disallowed.length ? ` --disallowedTools ${disallowed.join(" ")}` : ""),
     format: "claude-stream-json",
   };
+}
+
+/**
+ * The agent binary a local run would launch, or null when the launch goes via a
+ * shell (MYSTERON_AGENT_CMD) and so can't be introspected. Exported for testing.
+ */
+export function agentBinary(config: ProjectConfig): string | null {
+  if (process.env.MYSTERON_AGENT_CMD) return null; // shell command — assume the user knows it works
+  if (config.agent?.command) return config.agent.command;
+  return "claude";
+}
+
+/** Whether `bin` resolves to an executable — an explicit path that exists, or a name found on PATH. */
+function isExecutableAvailable(bin: string): boolean {
+  if (bin.includes("/") || bin.includes("\\")) {
+    try {
+      accessSync(bin, FS.X_OK);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  const exts = process.platform === "win32" ? (process.env.PATHEXT ?? ".EXE;.CMD;.BAT").split(";") : [""];
+  for (const dir of (process.env.PATH ?? "").split(path.delimiter).filter(Boolean)) {
+    for (const ext of exts) {
+      try {
+        accessSync(path.join(dir, bin + ext), FS.X_OK);
+        return true;
+      } catch {
+        /* keep looking */
+      }
+    }
+  }
+  return false;
+}
+
+/** Whether a ticket could actually be run locally — i.e. its agent program is installed. Exported for testing. */
+export function agentAvailable(config: ProjectConfig): boolean {
+  const bin = agentBinary(config);
+  return bin === null ? true : isExecutableAvailable(bin);
+}
+
+/** A user-facing explanation for why no local agent is available to run a ticket. Exported for testing. */
+export function agentUnavailableMessage(config: ProjectConfig): string {
+  if (config.agent?.command) {
+    return `No agent is available to run this ticket: the configured agent command \`${config.agent.command}\` isn't installed or on PATH. Check the project's agent config.`;
+  }
+  return "No agent is available to run this ticket: Claude Code (`claude`) isn't installed or on your PATH. Install Claude Code, or point Mysteron at another agent via config.agent.command or the MYSTERON_AGENT_CMD env var.";
 }
 
 interface RenderedLine {
