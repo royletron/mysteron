@@ -211,6 +211,7 @@ export interface Commit {
   subject: string;
   companion?: string;
   companionRef?: Companion;
+  mysteron?: boolean;
 }
 
 export interface BranchInfo {

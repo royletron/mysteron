@@ -171,6 +171,9 @@ export async function landGuestPatch(
   return { ok: true, mode: "branch", branch, commit, patchPath };
 }
 
+/** Identity Mysteron uses when it authors commits itself (snapshots, merges, board commits). */
+export const MYSTERON_EMAIL = "mysteron@local";
+
 export interface Commit {
   hash: string;
   shortHash: string;
@@ -179,6 +182,8 @@ export interface Commit {
   subject: string;
   /** Companion name parsed from a `Mysteron-Companion:` trailer, if present. */
   companion?: string;
+  /** True when Mysteron itself authored the commit (no companion behind it). */
+  mysteron?: boolean;
 }
 
 const UNIT = "\x1f"; // field separator
@@ -193,7 +198,7 @@ export async function recentCommits(projectRoot: string, limit = 50): Promise<Co
   try {
     const { stdout } = await exec(
       "git",
-      ["log", `-n${limit}`, `--pretty=format:%H${UNIT}%h${UNIT}%an${UNIT}%aI${UNIT}%s${UNIT}%b${REC}`],
+      ["log", `-n${limit}`, `--pretty=format:%H${UNIT}%h${UNIT}%an${UNIT}%ae${UNIT}%aI${UNIT}%s${UNIT}%b${REC}`],
       { cwd: projectRoot, maxBuffer: 16 * 1024 * 1024 },
     );
     return stdout
@@ -201,11 +206,11 @@ export async function recentCommits(projectRoot: string, limit = 50): Promise<Co
       .map((s) => s.replace(/^\n/, ""))
       .filter((s) => s.trim())
       .map((chunk) => {
-        const [hash, shortHash, author, date, subject, body = ""] = chunk.split(UNIT);
+        const [hash, shortHash, author, email, date, subject, body = ""] = chunk.split(UNIT);
         // Accept the legacy `Henson-Companion:` trailer too, so commits made
         // before the rename keep their attribution.
         const trailer = body.match(/^(?:Mysteron|Henson)-Companion:\s*(.+?)\s*$/im);
-        return { hash, shortHash, author, date, subject, companion: trailer?.[1] };
+        return { hash, shortHash, author, date, subject, companion: trailer?.[1], mysteron: email === MYSTERON_EMAIL };
       });
   } catch {
     return [];

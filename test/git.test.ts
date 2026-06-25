@@ -7,7 +7,7 @@ import { promisify } from "node:util";
 import { after, test } from "node:test";
 
 const exec = promisify(execFile);
-const { captureSnapshotRef, releaseSnapshotRef, landGuestPatch, listBranches, mergeBranch, deleteBranch, commitBoardChanges, unmergedBranchTicketIds } =
+const { captureSnapshotRef, releaseSnapshotRef, landGuestPatch, listBranches, mergeBranch, deleteBranch, commitBoardChanges, unmergedBranchTicketIds, recentCommits } =
   await import("../src/core/git.js");
 
 const roots: string[] = [];
@@ -267,4 +267,27 @@ test("captureSnapshotRef captures the full working tree (incl. untracked, excl. 
 
   await releaseSnapshotRef(root, "r5");
   assert.equal(await refExists(root, "refs/mysteron/snap/r5"), false);
+});
+
+test("recentCommits flags Mysteron-authored commits and parses the companion trailer", async () => {
+  const root = await makeRepo(); // base commit authored as test@local
+
+  await fs.writeFile(path.join(root, "a.txt"), "companion work\n");
+  await git(root, "add", "-A");
+  await git(root, "-c", "user.name=Test", "-c", "user.email=test@local", "commit", "-q", "-m", "feat: companion change\n\nMysteron-Companion: Onyx");
+
+  await fs.writeFile(path.join(root, "a.txt"), "mysteron work\n");
+  await git(root, "add", "-A");
+  await git(root, "-c", "user.name=Mysteron", "-c", "user.email=mysteron@local", "commit", "-q", "-m", "chore: commit board changes");
+
+  const commits = await recentCommits(root);
+  const [tip, companion, base] = commits;
+
+  assert.equal(tip.mysteron, true); // mysteron@local author
+  assert.equal(tip.companion, undefined);
+
+  assert.equal(companion.companion, "Onyx");
+  assert.equal(companion.mysteron, false); // test@local author
+
+  assert.equal(base.mysteron, false);
 });
