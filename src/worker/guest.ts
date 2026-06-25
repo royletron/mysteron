@@ -296,7 +296,6 @@ async function handleDispatch(socket: WebSocket, msg: DispatchMsg, hostUrl: stri
     socket.send(JSON.stringify({ t: "run-line", runId: msg.runId, stream, text }));
   const workdir = path.join(os.tmpdir(), `mysteron-guest-${msg.runId}`);
   const git = (args: string[]) => pexec("git", ["-C", workdir, ...args], { maxBuffer: 64 << 20 });
-  const id = ["-c", "user.name=Mysteron Guest", "-c", "user.email=guest@local"];
 
   let status: "done" | "failed" = "failed";
   let exitCode: number | null = null;
@@ -314,8 +313,15 @@ async function handleDispatch(socket: WebSocket, msg: DispatchMsg, hostUrl: stri
     await fs.rm(tar, { force: true });
 
     await git(["init", "-q"]);
+    // Give the throwaway repo a committer identity *in its config* — not just on our
+    // own bookkeeping commits below — so the agent's `git commit` succeeds even on a
+    // guest box with no global git identity. Without it the agent's commits fail, we
+    // capture no message, and the host falls back to the bare ticket title — which is
+    // why guest commits didn't follow the companion's commit conventions.
+    await git(["config", "user.name", "Mysteron Guest"]);
+    await git(["config", "user.email", "guest@local"]);
     await git(["add", "-A"]);
-    await git([...id, "commit", "-q", "-m", "base", "--allow-empty"]);
+    await git(["commit", "-q", "-m", "base", "--allow-empty"]);
     const base = (await git(["rev-parse", "HEAD"])).stdout.trim();
 
     line("system", `▶ running locally for "${msg.ticketTitle}"…`);
@@ -343,7 +349,7 @@ async function handleDispatch(socket: WebSocket, msg: DispatchMsg, hostUrl: stri
     // Capture anything the agent left uncommitted so the returned diff is complete.
     await git(["add", "-A"]);
     const pending = (await git(["diff", "--cached", "--name-only"])).stdout.trim();
-    if (pending) await git([...id, "commit", "-q", "-m", agentCommits > 0 ? "chore: capture uncommitted changes" : "work"]);
+    if (pending) await git(["commit", "-q", "-m", agentCommits > 0 ? "chore: capture uncommitted changes" : "work"]);
     const { stdout: patch } = await git(["diff", "--binary", base, "HEAD"]);
     patchBase64 = Buffer.from(patch, "utf8").toString("base64");
     status = exitCode === 0 ? "done" : "failed";

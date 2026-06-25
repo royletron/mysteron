@@ -174,6 +174,20 @@ test("buildPrompt embeds the recipe's git behaviour and team", () => {
   assert.ok(!buildPrompt(promptConfig(), promptTicket, "", "").includes("# Attached images"));
 });
 
+test("buildPrompt includes the companion's brief so guest + local runs get the spec", () => {
+  const companion = { id: "c1", name: "Bo", role: "soloist", avatarSeed: "Bo" };
+  const brief = "# Commits\n\nBe fun, include emoji, use conventional commits";
+
+  // With a brief, it surfaces under its own heading (this is the only place the
+  // companion's commit conventions reach the agent — local and guest runs alike).
+  const withBrief = buildPrompt(promptConfig(), promptTicket, "spec", "etiquette", companion as any, brief);
+  assert.match(withBrief, /# Your brief/);
+  assert.match(withBrief, /use conventional commits/);
+
+  // Without one, no empty heading is emitted.
+  assert.ok(!buildPrompt(promptConfig(), promptTicket, "spec", "etiquette", companion as any).includes("# Your brief"));
+});
+
 test("agentAvailable reports whether a ticket can actually be run locally", () => {
   const saved = process.env.MYSTERON_AGENT_CMD;
   const savedPath = process.env.PATH;
