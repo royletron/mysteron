@@ -11,7 +11,7 @@ import {
 import { navigate } from "./hooks";
 import { Avatar } from "./Avatar";
 import { LiveDot, CloudGlyph } from "./ui";
-import { Loader2 } from "lucide-preact";
+import { Loader2, MoreHorizontal } from "lucide-preact";
 
 export function Board({
   detail,
@@ -39,6 +39,22 @@ export function Board({
     });
     reload();
   };
+
+  // Move every ticket in a column to another state (or the bin), with a confirm.
+  const bulkMove = async (from: TicketState, to: TicketState) => {
+    const count = (detail.board[from] || []).length;
+    if (!count) return;
+    const dest = to === "bin" ? "the bin" : STATE_LABELS[to];
+    if (!confirm(`Move all ${count} ticket${count === 1 ? "" : "s"} from ${STATE_LABELS[from]} to ${dest}?`)) return;
+    await api(`/api/projects/${projectId}/tickets/bulk-move`, {
+      method: "POST",
+      body: JSON.stringify({ from, to }),
+    });
+    reload();
+  };
+
+  // Columns plus the bin — every place a column's tickets can be sent in bulk.
+  const targets: TicketState[] = [...detail.states, "bin"];
 
   return (
     <div>
@@ -71,7 +87,16 @@ export function Board({
             >
               <div class="mb-2.5 flex items-center justify-between text-xs uppercase tracking-wide text-zinc-500">
                 <span>{STATE_LABELS[state]}</span>
-                <span class="rounded-full bg-zinc-800 px-2 py-0.5">{tickets.length}</span>
+                <div class="flex items-center gap-1.5">
+                  <span class="rounded-full bg-zinc-800 px-2 py-0.5">{tickets.length}</span>
+                  {tickets.length > 0 && (
+                    <ColumnMenu
+                      from={state}
+                      targets={targets.filter((t) => t !== state)}
+                      onMove={bulkMove}
+                    />
+                  )}
+                </div>
               </div>
               {tickets.map((t) => (
                 <TicketCard
@@ -89,6 +114,51 @@ export function Board({
           );
         })}
       </div>
+    </div>
+  );
+}
+
+/** A per-column "⋯" menu offering a bulk move of every ticket in the column to
+ *  another column or the bin. */
+function ColumnMenu({
+  from,
+  targets,
+  onMove,
+}: {
+  from: TicketState;
+  targets: TicketState[];
+  onMove: (from: TicketState, to: TicketState) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div class="relative">
+      <button
+        class="btn btn-sm btn-ghost px-1 py-0.5 text-zinc-500 hover:text-violet-400"
+        title="Move all tickets in this column"
+        onClick={() => setOpen((o) => !o)}
+      >
+        <MoreHorizontal size={14} />
+      </button>
+      {open && (
+        <>
+          <div class="fixed inset-0 z-20" onClick={() => setOpen(false)} />
+          <div class="absolute right-0 z-30 mt-1 min-w-[160px] rounded-sm border border-zinc-700 bg-zinc-900 py-1 text-zinc-200 shadow-lg shadow-black/40">
+            <div class="px-2.5 py-1 text-[10px] uppercase tracking-wide text-zinc-500">Move all to</div>
+            {targets.map((to) => (
+              <button
+                key={to}
+                class="block w-full px-2.5 py-1 text-left text-xs normal-case hover:bg-zinc-800 hover:text-violet-400"
+                onClick={() => {
+                  setOpen(false);
+                  onMove(from, to);
+                }}
+              >
+                {to === "bin" ? "🗑 Bin" : STATE_LABELS[to]}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }

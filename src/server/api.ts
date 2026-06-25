@@ -12,6 +12,7 @@ import {
   listDocs,
   listMemories,
   listTickets,
+  moveTicketsByState,
   loadProjectConfig,
   readDoc,
   updateTicket,
@@ -28,7 +29,7 @@ import {
 import { findEntry, loadRegistry, unregisterProject } from "../core/registry.js";
 import { initProject, saveProjectConfig } from "../core/project.js";
 import { RECIPES, findRecipe } from "../core/recipes.js";
-import { BOARD_STATES, TICKET_STATES } from "../core/types.js";
+import { BOARD_STATES, TICKET_STATES, type TicketState } from "../core/types.js";
 import { allPlugins, enabledPlugins } from "../plugins/manager.js";
 import { usageMonitorPlugin } from "../plugins/usage-monitor/index.js";
 import type { ProjectWatcher } from "../core/watcher.js";
@@ -431,6 +432,20 @@ export function registerApi(
     const ticket = await createTicket(r.entry.path, { ...req.body, companionId, assignee });
     bus.emitEvent({ type: "board-changed", projectId: r.entry.id, detail: ticket.id });
     res.json({ ticket });
+  });
+
+  // Bulk-move a whole column: move every ticket in `from` to `to` (a column, or
+  // the bin) in one request. The UI confirms before calling this.
+  app.post("/api/projects/:id/tickets/bulk-move", async (req: Request, res: Response) => {
+    const r = await resolve(req.params.id);
+    if (!r) return notFound(res);
+    const { from, to } = (req.body ?? {}) as { from?: TicketState; to?: TicketState };
+    if (!from || !to || !TICKET_STATES.includes(from) || !TICKET_STATES.includes(to)) {
+      return res.status(400).json({ error: "from and to must be valid ticket states" });
+    }
+    const moved = await moveTicketsByState(r.entry.path, from, to);
+    if (moved > 0) bus.emitEvent({ type: "board-changed", projectId: r.entry.id });
+    res.json({ moved });
   });
 
   app.patch("/api/projects/:id/tickets/:ticketId", async (req: Request, res: Response) => {

@@ -240,6 +240,21 @@ export async function binStaleDone(projectRoot: string, maxAgeMs = BIN_AFTER_MS)
   return moved;
 }
 
+/** Move every ticket currently in one column to another state (or the bin) in
+ *  one go. Returns how many tickets were moved. */
+export async function moveTicketsByState(
+  projectRoot: string,
+  from: TicketState,
+  to: TicketState,
+): Promise<number> {
+  if (from === to) return 0;
+  const tickets = await listTickets(projectRoot, { state: from });
+  for (const t of tickets) {
+    await updateTicket(projectRoot, t.id, { state: to });
+  }
+  return tickets.length;
+}
+
 /**
  * Pull the next actionable ticket: the highest-priority ticket in "ready",
  * optionally moving it to "in-progress" and assigning it.

@@ -10,7 +10,7 @@ process.env.MYSTERON_HOME = path.join(tmp, "home");
 process.env.CLAUDE_PROJECTS_DIR = path.join(tmp, "claude");
 
 const { initProject, loadProjectConfig } = await import("../src/core/project.js");
-const { createTicket, listTickets, nextTicket, updateTicket, getTicket, deleteTicket, addAttachment, removeAttachment, readAttachment, binStaleDone } = await import("../src/core/board.js");
+const { createTicket, listTickets, nextTicket, updateTicket, getTicket, deleteTicket, addAttachment, removeAttachment, readAttachment, binStaleDone, moveTicketsByState } = await import("../src/core/board.js");
 const { readDoc, writeDoc } = await import("../src/core/docs.js");
 const { loadRegistry } = await import("../src/core/registry.js");
 const { usageInWindow } = await import("../src/plugins/usage-monitor/usage.js");
@@ -158,6 +158,24 @@ test("binStaleDone sweeps long-done tickets into the bin", async () => {
   const moved = await binStaleDone(projectRoot, 0);
   assert.ok(moved >= 1);
   assert.equal((await getTicket(projectRoot, t.id))?.state, "bin");
+});
+
+test("moveTicketsByState bulk-moves a whole column", async () => {
+  const root = path.join(tmp, "bulk");
+  await fs.mkdir(root, { recursive: true });
+  await createTicket(root, { title: "a", state: "backlog" });
+  await createTicket(root, { title: "b", state: "backlog" });
+  await createTicket(root, { title: "c", state: "ready" });
+
+  // Same-from-and-to is a no-op.
+  assert.equal(await moveTicketsByState(root, "backlog", "backlog"), 0);
+
+  const moved = await moveTicketsByState(root, "backlog", "bin");
+  assert.equal(moved, 2);
+  assert.equal((await listTickets(root, { state: "backlog" })).length, 0);
+  assert.equal((await listTickets(root, { state: "bin" })).length, 2);
+  // Untouched columns stay put.
+  assert.equal((await listTickets(root, { state: "ready" })).length, 1);
 });
 
 test("docs round-trip with path-traversal guard", async () => {
