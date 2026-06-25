@@ -301,7 +301,9 @@ public coordinator (owns the board + repo); **guests** dial in from anywhere
 4. For each dispatched ticket: the host **pins a snapshot** of its working tree
    (a `git archive` of tracked files, incl. uncommitted edits — no shared git
    remote needed) and sends it with the composed prompt. The guest runs Claude
-   locally, streams its output back to the host's live view, then returns a
+   locally — pointed at the host's **live MCP over HTTP** (token-gated, scoped to
+   the run's project) so it sees the real board, not just the tracked files in its
+   snapshot — streams its output back to the host's live view, then returns a
    `git diff` of the result.
 5. The host **lands that patch the way a local run would** under the project's
    git strategy: **current-branch** recipes fast-forward the checked-out branch
@@ -321,7 +323,10 @@ the header's live dot (click it for per-guest detail). Guest runs are clearly
 ticket's live view, and in the run list — and the host **terminal** shows an
 animated line while guests are working on its behalf, plus a one-liner as each
 finishes. When a guest's work lands on a dedicated branch, that branch is shown
-as a ⎇ chip on the run (with the `git merge` command to bring it in).
+as a ⎇ chip on the run, and the project's **Branches** tab lists every open
+branch PR-style (companion, ahead/behind, files changed) with one-click **Merge**
+(no-ff into the checked-out branch; refuses on a dirty tree, aborts cleanly on
+conflict) and **Delete**.
 
 Endpoints: host `GET /api/workers`, `POST/DELETE /api/settings/guest` (token);
 guest `GET/POST/DELETE /api/guest` (offer) and `GET /api/guest/board` (host board
@@ -379,6 +384,7 @@ Configure via env:
 | `MYSTERON_USAGE_WINDOW_HOURS` | `5` | Rolling window length |
 | `CLAUDE_PROJECTS_DIR` | `~/.claude/projects` | Where transcripts are read from |
 | `MYSTERON_RATELIMIT_PROXY` | `1` | Set `0` to disable the usage capture proxy |
+| `MYSTERON_MCP_NAG` | `1` | Set `0` to stop the once-a-day offer to register Mysteron's MCP with Claude Code |
 
 ## CLI
 

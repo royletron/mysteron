@@ -190,6 +190,18 @@ export interface Commit {
   companionRef?: Companion;
 }
 
+export interface BranchInfo {
+  name: string;
+  shortHash: string;
+  subject: string;
+  date: string;
+  companion?: string;
+  companionRef?: Companion;
+  ahead: number;
+  behind: number;
+  filesChanged: number;
+}
+
 export interface Recipe {
   id: string;
   name: string;

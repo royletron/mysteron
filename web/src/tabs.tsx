@@ -4,6 +4,7 @@ import {
   fmtBytes,
   fmtNum,
   fmtWhen,
+  type BranchInfo,
   type Commit,
   type Companion,
   type ProjectConfig,
@@ -654,6 +655,94 @@ export function CommitsTab({ detail }: { detail: ProjectDetail }) {
               <span class="shrink-0 text-xs text-zinc-500">
                 {commit.companionRef?.name ?? commit.author} · {fmtWhen(commit.date)}
               </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---- Branches (PR-style review list) ------------------------------------
+export function BranchesTab({ detail }: { detail: ProjectDetail }) {
+  const projectId = detail.entry.id;
+  const { data, loading, reload } = useAsync(
+    () => api<{ current: string; branches: BranchInfo[] }>(`/api/projects/${projectId}/branches`),
+    [projectId],
+  );
+  const [busy, setBusy] = useState("");
+  const branches = data?.branches ?? [];
+
+  const act = async (path: string, branch: string) => {
+    setBusy(branch);
+    try {
+      await api(`/api/projects/${projectId}/branches/${path}`, { method: "POST", body: JSON.stringify({ branch }) });
+      reload();
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setBusy("");
+    }
+  };
+  const merge = (b: BranchInfo) => act("merge", b.name);
+  const drop = (b: BranchInfo) => {
+    if (confirm(`Delete branch ${b.name}? Its commits are discarded if they aren't merged.`)) act("delete", b.name);
+  };
+
+  return (
+    <div class="card">
+      <h2 class="text-lg font-semibold">Open branches</h2>
+      <p class="text-sm text-zinc-400">
+        Work that landed on its own branch — guest runs under a new-branch recipe, or when the host's tree was busy.
+        Merge one into <code>{data?.current || "the current branch"}</code> when you're happy with it.
+      </p>
+      {loading && !data ? (
+        <div class="pulse mt-2 text-sm text-zinc-500">Loading…</div>
+      ) : branches.length === 0 ? (
+        <div class="mt-2 text-sm text-zinc-500">
+          No open branches — guest work either landed on the current branch or hasn't run yet.
+        </div>
+      ) : (
+        <div class="mt-3 flex flex-col gap-2">
+          {branches.map((b) => (
+            <div key={b.name} class="flex items-center gap-3 rounded-sm border border-zinc-800 p-2.5">
+              {b.companionRef ? (
+                <Avatar companion={b.companionRef} size={26} />
+              ) : (
+                <span class="inline-flex h-[26px] w-[26px] shrink-0 items-center justify-center text-zinc-500">⎇</span>
+              )}
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-2">
+                  <code class="truncate text-sm text-violet-300" title={b.name}>
+                    {b.name}
+                  </code>
+                  <span class="shrink-0 text-xs text-zinc-500">{b.shortHash}</span>
+                </div>
+                <div class="truncate text-xs text-zinc-400" title={b.subject}>
+                  {b.subject}
+                </div>
+                <div class="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-zinc-500">
+                  {b.companion && <span>{b.companion}</span>}
+                  <span>{fmtWhen(b.date)}</span>
+                  <span class="tabular-nums" title="ahead / behind the current branch">
+                    ↑{b.ahead} ↓{b.behind}
+                  </span>
+                  <span>
+                    {b.filesChanged} file{b.filesChanged === 1 ? "" : "s"}
+                  </span>
+                </div>
+              </div>
+              <button class="btn btn-primary btn-sm shrink-0" disabled={busy === b.name} onClick={() => merge(b)}>
+                {busy === b.name ? "…" : "Merge"}
+              </button>
+              <button
+                class="btn btn-danger btn-sm shrink-0"
+                disabled={busy === b.name}
+                title="Delete branch"
+                onClick={() => drop(b)}
+              >
+                ✕
+              </button>
             </div>
           ))}
         </div>

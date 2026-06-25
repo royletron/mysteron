@@ -16,6 +16,7 @@ import { startStdioMcp } from "./mcp/server.js";
 import { serve } from "./server/index.js";
 import { joinHost } from "./worker/guest.js";
 import { parseDuration } from "./core/worker-protocol.js";
+import { maybeOfferMcpInstall } from "./cli-mcp-nag.js";
 
 type Flags = Record<string, string | boolean>;
 
@@ -77,6 +78,10 @@ async function resolveRoot(idOrPath?: string): Promise<string> {
 async function main(): Promise<void> {
   const [, , cmd, ...rest] = process.argv;
   const { positionals, flags } = parseArgs(rest);
+
+  // Nudge the operator to register Mysteron's MCP with Claude Code (once/day).
+  // Never for `mcp` — that command's stdio is the MCP transport.
+  if (cmd && cmd !== "mcp") await maybeOfferMcpInstall();
 
   switch (cmd) {
     case "init": {

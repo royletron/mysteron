@@ -37,10 +37,11 @@ import { checkUsageBudget } from "../runner/budget.js";
 import type { Autopilot } from "../runner/autopilot.js";
 import type { RunEvent } from "../core/events.js";
 import { registerAuth } from "./auth.js";
+import { createWorkerMcp } from "./worker-mcp.js";
 import type { WorkerRegistry } from "./workers.js";
 import type { GuestController } from "./guest-controller.js";
 import { loadSettings, verifyGuestToken } from "../core/settings.js";
-import { workingTreeRef } from "../core/git.js";
+import { workingTreeRef, listBranches, currentBranch, mergeBranch, deleteBranch } from "../core/git.js";
 
 interface ResolvedProject {
   entry: RegistryEntry;
@@ -120,6 +121,14 @@ export function registerApi(
   app.get("/api/workers", (_req: Request, res: Response) => {
     res.json({ workers: workers.list() });
   });
+
+  // The project's MCP (board / docs / memory) served to a guest over HTTP, so a
+  // guest agent works against the host's live board (the snapshot it runs in only
+  // carries tracked files). Scoped to the run's project and gated by guest token.
+  const workerMcp = createWorkerMcp(runs);
+  app.post("/api/worker/mcp/:runId", (req, res) => void workerMcp.post(req, res));
+  app.get("/api/worker/mcp/:runId", (req, res) => void workerMcp.session(req, res));
+  app.delete("/api/worker/mcp/:runId", (req, res) => void workerMcp.session(req, res));
 
   // A guest fetches the working-tree snapshot for a run it was dispatched. Gated
   // by the guest token (this path bypasses the password cookie gate).
@@ -308,6 +317,41 @@ export function registerApi(
         companionRef: commit.companion ? byName.get(commit.companion) : undefined,
       })),
     });
+  });
+
+  // Open branches (a PR-style review list) — guest runs land work here. Each
+  // carries the companion that produced it (Mysteron-Companion trailer) plus
+  // ahead/behind + files-changed vs the checked-out branch.
+  app.get("/api/projects/:id/branches", async (req: Request, res: Response) => {
+    const r = await resolve(req.params.id);
+    if (!r) return notFound(res);
+    const branches = await listBranches(r.entry.path);
+    const byName = new Map(r.config.companions.map((c) => [c.name, c]));
+    res.json({
+      current: await currentBranch(r.entry.path),
+      branches: branches.map((b) => ({ ...b, companionRef: b.companion ? byName.get(b.companion) : undefined })),
+    });
+  });
+
+  // Merge an open branch into the checked-out branch (no-ff; refuses on a dirty
+  // tree, aborts cleanly on conflict).
+  app.post("/api/projects/:id/branches/merge", async (req: Request, res: Response) => {
+    const r = await resolve(req.params.id);
+    if (!r) return notFound(res);
+    const branch = (req.body?.branch ?? "").toString();
+    const result = await mergeBranch(r.entry.path, branch);
+    if (!result.ok) return res.status(result.conflicted ? 409 : 400).json(result);
+    res.json(result);
+  });
+
+  // Delete an open branch (e.g. after merging or discarding it).
+  app.post("/api/projects/:id/branches/delete", async (req: Request, res: Response) => {
+    const r = await resolve(req.params.id);
+    if (!r) return notFound(res);
+    const branch = (req.body?.branch ?? "").toString();
+    const result = await deleteBranch(r.entry.path, branch);
+    if (!result.ok) return res.status(400).json(result);
+    res.json(result);
   });
 
   // Update editable project settings (yolo, default recipe).

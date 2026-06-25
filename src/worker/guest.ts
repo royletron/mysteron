@@ -237,12 +237,24 @@ function runClaude(
   msg: DispatchMsg,
   line: LineFn,
   onStats: (costUsd?: number, numTurns?: number) => void,
+  mcpUrl?: string,
+  token?: string,
 ): Promise<number | null> {
   return new Promise((resolve) => {
     const mode = msg.yolo ? "bypassPermissions" : "acceptEdits";
     const args = ["-p", msg.prompt, "--output-format", "stream-json", "--verbose", "--permission-mode", mode];
     if (msg.disallowedTools.length) args.push("--disallowedTools", ...msg.disallowedTools);
-    if (msg.allowedTools.length) args.push("--allowedTools", ...msg.allowedTools);
+    const allowed = [...msg.allowedTools];
+    // Point Claude at the host's live MCP (board/docs/memory) over HTTP, so the
+    // guest works against the real board rather than its tracked-files snapshot.
+    if (mcpUrl) {
+      const cfg = JSON.stringify({
+        mcpServers: { mysteron: { type: "http", url: mcpUrl, headers: { "x-mysteron-guest-token": token ?? "" } } },
+      });
+      args.push("--mcp-config", cfg, "--strict-mcp-config");
+      if (!allowed.includes("mcp__mysteron")) allowed.push("mcp__mysteron");
+    }
+    if (allowed.length) args.push("--allowedTools", ...allowed);
 
     const child = spawn("claude", args, { cwd: workdir, stdio: ["ignore", "pipe", "pipe"] });
     let buffer = "";
@@ -306,10 +318,18 @@ async function handleDispatch(socket: WebSocket, msg: DispatchMsg, hostUrl: stri
     const base = (await git(["rev-parse", "HEAD"])).stdout.trim();
 
     line("system", `▶ running locally for "${msg.ticketTitle}"…`);
-    exitCode = await runClaude(workdir, msg, line, (c, n) => {
-      costUsd = c;
-      numTurns = n;
-    });
+    const mcpUrl = msg.mcpPath ? new URL(msg.mcpPath, hostUrl).toString() : undefined;
+    exitCode = await runClaude(
+      workdir,
+      msg,
+      line,
+      (c, n) => {
+        costUsd = c;
+        numTurns = n;
+      },
+      mcpUrl,
+      token,
+    );
 
     await git(["add", "-A"]);
     await git([...id, "commit", "-q", "-m", "work", "--allow-empty"]);

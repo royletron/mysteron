@@ -608,6 +608,7 @@ export class RunManager {
       ticketTitle: args.ticket.title,
       prompt,
       snapshotPath: `/api/worker/snapshot/${run.id}`,
+      mcpPath: `/api/worker/mcp/${run.id}`,
       yolo: args.config.yolo,
       allowedTools: allowed,
       disallowedTools: disallowed,

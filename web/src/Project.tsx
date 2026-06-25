@@ -4,7 +4,7 @@ import { navigate, useAsync } from "./hooks";
 import { ErrorBox, Loading } from "./ui";
 import { Board } from "./Board";
 import { TicketPanel } from "./TicketPanel";
-import { DocsTab, MemoryTab, PluginsTab, CompanionTab, CommitsTab, BinTab } from "./tabs";
+import { DocsTab, MemoryTab, PluginsTab, CompanionTab, CommitsTab, BranchesTab, BinTab } from "./tabs";
 import { Avatar } from "./Avatar";
 import type { AppEvent } from "./App";
 import {
@@ -12,6 +12,7 @@ import {
   FileText,
   Brain,
   GitCommitHorizontal,
+  GitPullRequestArrow,
   Gauge,
   Bot,
   Trash2,
@@ -23,6 +24,7 @@ const TABS: [string, string, LucideIcon][] = [
   ["docs", "Docs", FileText],
   ["memory", "Memory", Brain],
   ["commits", "Commits", GitCommitHorizontal],
+  ["branches", "Branches", GitPullRequestArrow],
   ["plugins", "Plugins & usage", Gauge],
   ["agent", "Companion", Bot],
   ["bin", "Bin", Trash2],
@@ -210,6 +212,7 @@ export function Project({ projectId, tab: urlTab, evt }: { projectId: string; ta
       {tab === "docs" && <DocsTab detail={data} />}
       {tab === "memory" && <MemoryTab detail={data} />}
       {tab === "commits" && <CommitsTab detail={data} />}
+      {tab === "branches" && <BranchesTab detail={data} />}
       {tab === "plugins" && <PluginsTab detail={data} />}
       {tab === "agent" && <CompanionTab detail={data} />}
       {tab === "bin" && <BinTab detail={data} reload={reload} />}

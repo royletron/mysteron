@@ -7,7 +7,8 @@ import { promisify } from "node:util";
 import { after, test } from "node:test";
 
 const exec = promisify(execFile);
-const { captureSnapshotRef, releaseSnapshotRef, landGuestPatch } = await import("../src/core/git.js");
+const { captureSnapshotRef, releaseSnapshotRef, landGuestPatch, listBranches, mergeBranch, deleteBranch } =
+  await import("../src/core/git.js");
 
 const roots: string[] = [];
 const git = (root: string, ...a: string[]) => exec("git", ["-C", root, ...a]);
@@ -120,6 +121,66 @@ test("landGuestPatch always saves the raw patch for recovery", async () => {
   const patch = await guestPatch(root);
   const res = await landGuestPatch(root, { runId: "r6", ticketId: "t6", patch, message: "m", strategy: "current-branch" });
   assert.equal(await fs.readFile(res.patchPath, "utf8"), patch);
+});
+
+/** Commit `content` to `file` on a new `branch`, then return to the prior branch. */
+async function commitOnBranch(root: string, branch: string, file: string, content: string, msg: string, trailer?: string) {
+  await git(root, "checkout", "-q", "-b", branch);
+  await fs.writeFile(path.join(root, file), content);
+  await git(root, "add", "-A");
+  await git(root, "commit", "-q", "-m", trailer ? `${msg}\n\n${trailer}` : msg);
+  await git(root, "checkout", "-q", "-");
+}
+
+test("listBranches / mergeBranch / deleteBranch round-trip", async () => {
+  const root = await makeRepo();
+  await commitOnBranch(root, "mysteron/t1", "feature.txt", "feature\n", "Add feature", "Mysteron-Companion: Onyx");
+
+  let branches = await listBranches(root);
+  assert.equal(branches.length, 1);
+  assert.equal(branches[0].name, "mysteron/t1");
+  assert.equal(branches[0].companion, "Onyx");
+  assert.equal(branches[0].ahead, 1);
+  assert.equal(branches[0].behind, 0);
+  assert.equal(branches[0].filesChanged, 1);
+
+  const merged = await mergeBranch(root, "mysteron/t1");
+  assert.equal(merged.ok, true);
+  assert.equal(await read(root, "feature.txt"), "feature\n"); // landed on the current branch
+
+  assert.equal((await listBranches(root))[0].ahead, 0); // now fully merged
+
+  assert.equal((await deleteBranch(root, "mysteron/t1")).ok, true);
+  assert.equal((await listBranches(root)).length, 0);
+});
+
+test("mergeBranch refuses a dirty working tree", async () => {
+  const root = await makeRepo();
+  await commitOnBranch(root, "mysteron/t2", "f.txt", "x\n", "m");
+  await fs.writeFile(path.join(root, "a.txt"), "dirty\n");
+  const res = await mergeBranch(root, "mysteron/t2");
+  assert.equal(res.ok, false);
+  assert.match(res.error ?? "", /uncommitted/);
+});
+
+test("mergeBranch reports conflicts and aborts cleanly", async () => {
+  const root = await makeRepo();
+  await commitOnBranch(root, "mysteron/t3", "a.txt", "branch change\n", "m");
+  await fs.writeFile(path.join(root, "a.txt"), "current change\n");
+  await git(root, "add", "-A");
+  await git(root, "commit", "-q", "-m", "current edit");
+
+  const res = await mergeBranch(root, "mysteron/t3");
+  assert.equal(res.ok, false);
+  assert.equal(res.conflicted, true);
+  assert.equal(await read(root, "a.txt"), "current change\n"); // aborted — tree restored
+  assert.equal((await git(root, "status", "--porcelain")).stdout.trim(), "");
+});
+
+test("invalid branch names are rejected (no git invocation)", async () => {
+  const root = await makeRepo();
+  assert.equal((await mergeBranch(root, "--force")).ok, false);
+  assert.equal((await deleteBranch(root, "a b")).ok, false);
 });
 
 test("captureSnapshotRef pins working-tree state; releaseSnapshotRef drops it", async () => {

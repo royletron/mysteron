@@ -190,3 +190,109 @@ export async function recentCommits(projectRoot: string, limit = 50): Promise<Co
     return [];
   }
 }
+
+export interface BranchInfo {
+  name: string;
+  /** Tip commit short hash. */
+  shortHash: string;
+  subject: string;
+  date: string; // ISO of the tip commit
+  /** Companion name from the tip's `Mysteron-Companion:` trailer, if any. */
+  companion?: string;
+  /** Commits this branch has that the checked-out branch doesn't. */
+  ahead: number;
+  /** Commits the checked-out branch has that this one doesn't. */
+  behind: number;
+  /** Files this branch changes relative to its merge-base with the current branch. */
+  filesChanged: number;
+}
+
+/** A branch name safe to pass to git as an argument (no leading dash, no spaces/control, no `..`). */
+export function isValidBranchName(name: string): boolean {
+  return /^(?!-)[\w./-]+$/.test(name) && !name.includes("..");
+}
+
+/** The currently checked-out branch ("" if detached / not a repo). */
+export async function currentBranch(root: string): Promise<string> {
+  return exec("git", ["-C", root, "symbolic-ref", "--quiet", "--short", "HEAD"])
+    .then(({ stdout }) => stdout.trim())
+    .catch(() => "");
+}
+
+/**
+ * Local branches other than the checked-out one, with PR-style metadata: how far
+ * ahead/behind the current branch they are, what they touch, and the companion
+ * that produced them. Guest work lands on these branches (see landGuestPatch), so
+ * this powers the "open branches" review list. Returns [] for a non-git dir.
+ */
+export async function listBranches(root: string): Promise<BranchInfo[]> {
+  const current = await currentBranch(root);
+  let raw: string;
+  try {
+    const fmt = `%(refname:short)${UNIT}%(objectname:short)${UNIT}%(committerdate:iso-strict)${UNIT}%(contents:subject)${UNIT}%(trailers:key=Mysteron-Companion,valueonly)${REC}`;
+    raw = (await exec("git", ["-C", root, "for-each-ref", `--format=${fmt}`, "refs/heads"], { maxBuffer: 16 << 20 })).stdout;
+  } catch {
+    return [];
+  }
+  const rows = raw
+    .split(REC)
+    .map((s) => s.replace(/^\n/, ""))
+    .filter((s) => s.trim())
+    .map((chunk) => chunk.split(UNIT))
+    .filter(([name]) => name && name !== current);
+
+  return Promise.all(
+    rows.map(async ([name, shortHash, date, subject, companion]) => {
+      let ahead = 0;
+      let behind = 0;
+      let filesChanged = 0;
+      if (current) {
+        const counts = await exec("git", ["-C", root, "rev-list", "--left-right", "--count", `${current}...${name}`])
+          .then(({ stdout }) => stdout.trim().split(/\s+/).map(Number))
+          .catch(() => [0, 0]);
+        behind = counts[0] || 0;
+        ahead = counts[1] || 0;
+        filesChanged = await exec("git", ["-C", root, "diff", "--name-only", `${current}...${name}`])
+          .then(({ stdout }) => stdout.split("\n").filter(Boolean).length)
+          .catch(() => 0);
+      }
+      return { name, shortHash, date, subject, companion: companion?.trim() || undefined, ahead, behind, filesChanged };
+    }),
+  );
+}
+
+export interface MergeResult {
+  ok: boolean;
+  /** The merge hit conflicts and was aborted — the working tree is left untouched. */
+  conflicted?: boolean;
+  error?: string;
+}
+
+/**
+ * Merge a branch into the checked-out branch (no-ff, so the branch reads as a unit
+ * of work). Refuses on a dirty tree and aborts cleanly on conflict, rather than
+ * leaving the tree half-merged.
+ */
+export async function mergeBranch(root: string, branch: string): Promise<MergeResult> {
+  if (!isValidBranchName(branch)) return { ok: false, error: "invalid branch name" };
+  const git = (args: string[]) => exec("git", ["-C", root, ...args], { maxBuffer: 64 << 20 });
+  const dirty = await git(["status", "--porcelain", "--untracked-files=no"])
+    .then(({ stdout }) => stdout.trim().length > 0)
+    .catch(() => false);
+  if (dirty) return { ok: false, error: "working tree has uncommitted changes — commit or stash them first" };
+  try {
+    await git(["-c", "user.name=Mysteron", "-c", "user.email=mysteron@local", "merge", "--no-ff", "-m", `Merge ${branch}`, branch]);
+    return { ok: true };
+  } catch {
+    await git(["merge", "--abort"]).catch(() => undefined);
+    return { ok: false, conflicted: true, error: `conflicts merging ${branch} — resolve locally with \`git merge ${branch}\`` };
+  }
+}
+
+/** Delete a local branch (force; guest branches are disposable once reviewed). */
+export async function deleteBranch(root: string, branch: string): Promise<{ ok: boolean; error?: string }> {
+  if (!isValidBranchName(branch)) return { ok: false, error: "invalid branch name" };
+  return exec("git", ["-C", root, "branch", "-D", branch])
+    .then(() => ({ ok: true }))
+    .catch((e) => ({ ok: false, error: (e as Error).message }));
+}

@@ -76,6 +76,8 @@ export interface DispatchMsg {
   prompt: string;
   /** Host path to fetch the working-tree snapshot tar; guest prefixes its host URL. */
   snapshotPath: string;
+  /** Host path of the live MCP (board/docs/memory) for this run; guest prefixes its host URL and points Claude at it over HTTP. */
+  mcpPath?: string;
   yolo: boolean;
   allowedTools: string[];
   disallowedTools: string[];
