@@ -1,4 +1,5 @@
 import express, { type Express, type Request, type Response } from "express";
+import { spawn } from "node:child_process";
 import {
   bus,
   discoverProjectDocs,
@@ -36,6 +37,8 @@ import type { Autopilot } from "../runner/autopilot.js";
 import type { RunEvent } from "../core/events.js";
 import { registerAuth } from "./auth.js";
 import type { WorkerRegistry } from "./workers.js";
+import { loadSettings, verifyGuestToken } from "../core/settings.js";
+import { workingTreeRef } from "../core/git.js";
 
 interface ResolvedProject {
   entry: RegistryEntry;
@@ -113,6 +116,27 @@ export function registerApi(
   // --- Guest workers -------------------------------------------------------
   app.get("/api/workers", (_req: Request, res: Response) => {
     res.json({ workers: workers.list() });
+  });
+
+  // A guest fetches the working-tree snapshot for a run it was dispatched. Gated
+  // by the guest token (this path bypasses the password cookie gate).
+  app.get("/api/worker/snapshot/:runId", async (req: Request, res: Response) => {
+    const token = (req.header("x-mysteron-guest-token") || req.query.token || "").toString();
+    const settings = await loadSettings();
+    if (!verifyGuestToken(settings, token)) return res.status(401).json({ error: "invalid guest token" });
+    const run = runs.get(req.params.runId);
+    if (!run) return notFound(res);
+    const ref = await workingTreeRef(run.projectRoot);
+    res.setHeader("content-type", "application/x-tar");
+    // `git archive` of the working-tree ref → a tar of tracked files at their
+    // current (incl. uncommitted) content.
+    const child = spawn("git", ["-C", run.projectRoot, "archive", "--format=tar", ref]);
+    child.stdout.pipe(res);
+    child.stderr.resume();
+    child.on("error", () => {
+      if (!res.headersSent) res.status(500);
+      res.end();
+    });
   });
 
   // --- Projects ------------------------------------------------------------

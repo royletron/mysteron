@@ -55,7 +55,9 @@ async function publicStatus(req: Request) {
  */
 export function registerAuth(app: Express): void {
   app.use("/api", (req: Request, res: Response, next: NextFunction) => {
-    if (req.path.startsWith("/auth/")) return next();
+    // Auth endpoints and guest-worker endpoints carry their own credentials
+    // (login body / guest token), so they bypass the cookie gate.
+    if (req.path.startsWith("/auth/") || req.path.startsWith("/worker/")) return next();
     isAuthedByCookieHeader(req.headers.cookie)
       .then((ok) => (ok ? next() : res.status(401).json({ error: "authentication required" })))
       .catch(() => res.status(500).json({ error: "auth check failed" }));

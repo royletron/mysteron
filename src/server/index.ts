@@ -65,11 +65,14 @@ export async function serve(opts: ServeOptions = {}): Promise<{ port: number; cl
   const registry = await loadRegistry();
   const loaded = await runs.hydrate(registry.projects.map((p) => ({ projectId: p.id, projectRoot: p.path })));
   if (verbose && loaded) console.log(`[mysteron] loaded ${loaded} persisted run(s)`);
-  const autopilot = new Autopilot(runs);
-
   // Guest workers that dial in to offer their machine + Claude account.
   const workers = new WorkerRegistry();
   const stopWorkerSweep = workers.startSweeper();
+  // Route guest output + results into the run manager.
+  workers.onRunLine = (runId, stream, text) => runs.ingestWorkerLine(runId, stream, text);
+  workers.onRunDone = (runId, result) => void runs.applyGuestResult(runId, result);
+
+  const autopilot = new Autopilot(runs, workers);
 
   // Sweep tickets that have sat in "done" for 48h into the bin — now and hourly.
   const sweepBins = async () => {

@@ -17,6 +17,7 @@ const { initProject } = await import("../src/core/project.js");
 const { createTicket, listTickets } = await import("../src/core/board.js");
 const { RunManager } = await import("../src/runner/manager.js");
 const { Autopilot } = await import("../src/runner/autopilot.js");
+const { WorkerRegistry } = await import("../src/server/workers.js");
 
 const projectRoot = path.join(tmp, "proj");
 
@@ -44,7 +45,7 @@ test("autopilot drains ready tickets one at a time", async () => {
   await createTicket(projectRoot, { title: "Ticket one", state: "ready" });
   await createTicket(projectRoot, { title: "Ticket two", state: "ready" });
 
-  const ap = new Autopilot(new RunManager());
+  const ap = new Autopilot(new RunManager(), new WorkerRegistry());
   ap.start(config.id, projectRoot, config);
 
   // It should process both ready tickets, then go idle.

@@ -1,9 +1,10 @@
 import { bus, type AutopilotStatus } from "../core/events.js";
-import { nextTicketForCompanion } from "../core/board.js";
+import { listTickets, nextTicketForCompanion } from "../core/board.js";
 import { loadProjectConfig } from "../core/project.js";
 import { usageMonitorPlugin } from "../plugins/usage-monitor/index.js";
 import type { ProjectConfig } from "../core/types.js";
 import type { RunManager } from "./manager.js";
+import type { WorkerRegistry } from "../server/workers.js";
 
 function envMs(name: string, fallback: number): number {
   const n = Number(process.env[name]);
@@ -46,7 +47,10 @@ export class Autopilot {
   private states = new Map<string, AutopilotState>();
   private stopFlags = new Map<string, boolean>();
 
-  constructor(private runs: RunManager) {}
+  constructor(
+    private runs: RunManager,
+    private workers: WorkerRegistry,
+  ) {}
 
   status(projectId: string): AutopilotState | undefined {
     return this.states.get(projectId);
@@ -94,7 +98,12 @@ export class Autopilot {
         continue;
       }
 
-      // 1) Respect the usage budget — pause all companions until the window resets.
+      // 0) Fan unassigned ready tickets out to connected guests first. Guests run
+      //    on their own machine + Claude account, so they work regardless of the
+      //    host's own usage budget (below).
+      const guestWork = await this.fanOutToGuests(state, config);
+
+      // 1) Respect the usage budget — pause local companions until it resets.
       const budget = await this.checkBudget(state.projectRoot, config);
       if (budget && !budget.safeToContinue) {
         this.set(
@@ -109,7 +118,7 @@ export class Autopilot {
 
       // 2) Per companion: if it's free, dispatch its next ready ticket. Each
       //    companion does one task at a time; the soloist also takes unassigned ones.
-      let anyWork = false;
+      let anyWork = guestWork;
       for (const companion of config.companions) {
         if (this.stopFlags.get(state.projectId)) break;
         if (this.runs.activeForCompanion(state.projectId, companion.id)) {
@@ -150,6 +159,45 @@ export class Autopilot {
       await this.sleep(state, anyWork ? BREATHER_MS() : IDLE_POLL_MS());
     }
     if (state.status !== "stopped") this.set(state, "stopped", "Autopilot stopped.");
+  }
+
+  /**
+   * Hand unassigned ready tickets to idle guest workers (one each). Guests take
+   * only unassigned tickets, so they never steal a local companion's assigned
+   * work; the local companion loop runs first, so anything it claims is already
+   * "active" and skipped here.
+   */
+  private async fanOutToGuests(state: AutopilotState, config: ProjectConfig): Promise<boolean> {
+    const idleWorkers = this.workers.idle();
+    if (idleWorkers.length === 0) return false;
+    const ready = await listTickets(state.projectRoot, { state: "ready" });
+    const free = ready.filter((t) => !t.companionId && !this.runs.activeForTicket(state.projectId, t.id));
+    let dispatched = false;
+    for (const worker of idleWorkers) {
+      if (this.stopFlags.get(state.projectId)) break;
+      const ticket = free.shift();
+      if (!ticket) break;
+      try {
+        const run = await this.runs.startOnWorker(
+          { projectId: state.projectId, projectRoot: state.projectRoot, config, ticket },
+          this.workers,
+          { id: worker.id, label: worker.label },
+        );
+        dispatched = true;
+        this.addActivity(state, `☁ ${worker.label} → ${ticket.title}`);
+        if (run) {
+          void this.runs.waitFor(run.id).then((finished) => {
+            if (finished.status === "done") state.completed++;
+            const icon = finished.status === "done" ? "✓" : finished.status === "stopped" ? "■" : "✖";
+            this.addActivity(state, `${icon} ${worker.label}: ${ticket.title} — ${finished.status}`);
+            this.set(state, state.status, state.message);
+          });
+        }
+      } catch (err) {
+        this.addActivity(state, `✖ ${worker.label}: ${(err as Error).message}`);
+      }
+    }
+    return dispatched;
   }
 
   private async checkBudget(

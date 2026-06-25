@@ -7,7 +7,9 @@ import { bus, type RunLine } from "../core/events.js";
 import { updateTicket } from "../core/board.js";
 import { readDoc } from "../core/docs.js";
 import { findRecipe, gitInstruction } from "../core/recipes.js";
+import { applyGuestPatch } from "../core/git.js";
 import { defaultCompanion, getCompanion, readCompanionSpec } from "../core/companions.js";
+import type { WorkerRegistry, GuestRunResult } from "../server/workers.js";
 import { ETIQUETTE_DOC, SPEC_DOC, runsDir } from "../core/paths.js";
 import type { Companion, ProjectConfig, Ticket } from "../core/types.js";
 
@@ -48,6 +50,8 @@ export interface Run {
   logAvailable: boolean;
   /** Set when the agent reported hitting a usage/spend/rate limit (see LIMIT_HIT_RE). */
   limitHit?: boolean;
+  /** For guest runs: the branch the returned patch was committed to (for review). */
+  branch?: string;
   lines: RunLine[];
 }
 
@@ -523,6 +527,115 @@ export class RunManager {
     this.append(run, "system", "■ stopped by user");
     this.finish(run, "stopped", null);
     return true;
+  }
+
+  /**
+   * Dispatch a ticket to a connected guest worker instead of running it locally.
+   * Creates a Run attributed to the guest, composes the prompt here (the guest
+   * needs no board access), and asks the registry to hand it to the worker. The
+   * guest streams output back (ingestWorkerLine) and returns a patch on finish
+   * (applyGuestResult).
+   */
+  async startOnWorker(
+    args: StartArgs,
+    workers: WorkerRegistry,
+    worker: { id: string; label: string },
+  ): Promise<Run | undefined> {
+    const active = this.activeForTicket(args.projectId, args.ticket.id);
+    if (active) return active;
+
+    const companion = getCompanion(args.config, args.ticket.companionId) ?? defaultCompanion(args.config);
+    const spec = (await readDoc(args.projectRoot, SPEC_DOC)) ?? "";
+    const etiquette = (await readDoc(args.projectRoot, ETIQUETTE_DOC)) ?? "";
+    const companionSpec = companion ? await readCompanionSpec(args.projectRoot, companion.id) : undefined;
+    const prompt = buildPrompt(args.config, args.ticket, spec, etiquette, companion, companionSpec ?? undefined);
+
+    const run: Run = {
+      id: nanoid(10),
+      projectId: args.projectId,
+      projectRoot: args.projectRoot,
+      ticketId: args.ticket.id,
+      ticketTitle: args.ticket.title,
+      companionId: companion?.id,
+      companion: companion?.name ?? "companion",
+      hostname: worker.label, // attribute the run to the guest machine
+      status: "running",
+      command: `guest:${worker.label} ▶ ${args.ticket.title}`,
+      startedAt: new Date().toISOString(),
+      logAvailable: true,
+      lines: [],
+    };
+    this.runs.set(run.id, run);
+
+    await updateTicket(args.projectRoot, args.ticket.id, {
+      state: "in-progress",
+      assignee: companion?.name,
+    }).catch(() => undefined);
+
+    bus.emitRun({ kind: "started", runId: run.id, projectId: run.projectId, ticketId: run.ticketId });
+    bus.emitEvent({ type: "board-changed", projectId: run.projectId, detail: run.ticketId });
+    this.append(run, "system", `▶ dispatched to guest "${worker.label}"`);
+    void this.persist(run);
+
+    const allowed = (args.config.allowedTools ?? []).filter((t) => t.trim());
+    const disallowed = (args.config.disallowedTools ?? []).filter((t) => t.trim());
+    const ok = workers.dispatch(worker.id, {
+      t: "dispatch",
+      runId: run.id,
+      ticketId: args.ticket.id,
+      ticketTitle: args.ticket.title,
+      prompt,
+      snapshotPath: `/api/worker/snapshot/${run.id}`,
+      yolo: args.config.yolo,
+      allowedTools: allowed,
+      disallowedTools: disallowed,
+    });
+    if (!ok) {
+      this.append(run, "system", "✖ guest is no longer available");
+      this.finish(run, "failed", null);
+    }
+    return run;
+  }
+
+  /** A line of output streamed from a guest run. */
+  ingestWorkerLine(runId: string, stream: RunLine["stream"], text: string): void {
+    const run = this.runs.get(runId);
+    if (!run || run.status !== "running") return;
+    this.append(run, stream, text);
+  }
+
+  /** A guest run finished — apply its patch (if any) and finalize. */
+  async applyGuestResult(runId: string, result: GuestRunResult): Promise<void> {
+    const run = this.runs.get(runId);
+    if (!run || run.status !== "running") return;
+    if (result.costUsd != null) run.costUsd = result.costUsd;
+    if (result.numTurns != null) run.numTurns = result.numTurns;
+
+    let applied = false;
+    const patch = result.patchBase64 ? Buffer.from(result.patchBase64, "base64").toString("utf8") : "";
+    if (result.status === "done" && patch.trim()) {
+      const branch = `mysteron/${run.ticketId}-${run.id}`;
+      const res = await applyGuestPatch(run.projectRoot, {
+        runId: run.id,
+        branch,
+        patch,
+        message: run.ticketTitle,
+        trailer: `Mysteron-Companion: ${run.companion}`,
+      });
+      if (res.ok) {
+        applied = true;
+        run.branch = res.branch;
+        this.append(run, "system", `✓ guest changes committed to branch ${res.branch} (${res.commit?.slice(0, 8)})`);
+      } else {
+        this.append(run, "system", `✖ could not apply the guest's patch: ${res.error}`);
+      }
+    } else if (result.status === "done") {
+      this.append(run, "system", "ℹ guest finished but made no file changes.");
+    }
+
+    // Applied work goes to review; anything else returns to Ready for a retry.
+    await updateTicket(run.projectRoot, run.ticketId, { state: applied ? "review" : "ready" }).catch(() => undefined);
+    this.finish(run, result.status, result.exitCode);
   }
 
   private pipe(

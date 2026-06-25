@@ -23,7 +23,27 @@ export interface HeartbeatMsg {
   t: "heartbeat";
 }
 
-export type GuestMsg = RegisterMsg | HeartbeatMsg;
+/** A line of agent output the guest forwards to the host for the live view. */
+export interface RunLineMsg {
+  t: "run-line";
+  runId: string;
+  stream: "stdout" | "stderr" | "system";
+  text: string;
+}
+
+/** The guest finished a dispatched ticket and returns the resulting diff. */
+export interface RunDoneMsg {
+  t: "run-done";
+  runId: string;
+  status: "done" | "failed" | "stopped";
+  exitCode: number | null;
+  /** Base64 of a `git diff --binary` from the snapshot to the agent's result. */
+  patchBase64?: string;
+  costUsd?: number;
+  numTurns?: number;
+}
+
+export type GuestMsg = RegisterMsg | HeartbeatMsg | RunLineMsg | RunDoneMsg;
 
 export interface RegisteredMsg {
   t: "registered";
@@ -41,7 +61,22 @@ export interface ExpiredMsg {
   t: "expired";
 }
 
-export type HostMsg = RegisteredMsg | RejectedMsg | ExpiredMsg;
+/** Host asks a guest to run a ticket end-to-end on its machine. */
+export interface DispatchMsg {
+  t: "dispatch";
+  runId: string;
+  ticketId: string;
+  ticketTitle: string;
+  /** Fully composed agent prompt (host builds it; guest needs no board access). */
+  prompt: string;
+  /** Host path to fetch the working-tree snapshot tar; guest prefixes its host URL. */
+  snapshotPath: string;
+  yolo: boolean;
+  allowedTools: string[];
+  disallowedTools: string[];
+}
+
+export type HostMsg = RegisteredMsg | RejectedMsg | ExpiredMsg | DispatchMsg;
 
 /** Parse a human duration like "90s", "30m", "2h", "1d" into ms. */
 export function parseDuration(s: string): number | undefined {
