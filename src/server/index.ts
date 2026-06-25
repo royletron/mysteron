@@ -1,5 +1,6 @@
 import express from "express";
 import { existsSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { ProjectWatcher } from "../core/watcher.js";
@@ -140,7 +141,9 @@ export async function serve(opts: ServeOptions = {}): Promise<{ port: number; cl
     // routed here by path — multiple path-scoped WebSocketServers on one server
     // abort each other's handshakes (HTTP 400). /ws is auth-gated here.
     const wsHub = setupWebSocket(runs, verbose);
-    const workerWss = workers.createWss(() => registry.projects[0]?.name ?? "Mysteron host", verbose);
+    // A guest joins the host, not a project: every project's autopilot draws
+    // from one shared pool. Report the host machine so the label is accurate.
+    const workerWss = workers.createWss(() => os.hostname() || "Mysteron host", verbose);
     server.on("upgrade", (req, socket, head) => {
       const path = (req.url || "").split("?")[0];
       if (path === "/ws") {

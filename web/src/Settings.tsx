@@ -181,7 +181,7 @@ function OfferAsGuest() {
             </span>
             <span class="text-zinc-400">
               {g.hostUrl}
-              {g.projectName ? ` · ${g.projectName}` : ""}
+              {g.hostLabel ? ` · ${g.hostLabel}` : ""}
             </span>
             <div class="flex-1" />
             <button class="btn btn-danger btn-sm" onClick={withdraw}>

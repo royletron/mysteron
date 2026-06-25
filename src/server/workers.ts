@@ -108,7 +108,7 @@ export class WorkerRegistry {
    * upgrade to it by path (path-scoped servers sharing one HTTP server abort
    * each other's handshakes).
    */
-  createWss(projectName: () => string, verbose = false): WebSocketServer {
+  createWss(hostLabel: () => string, verbose = false): WebSocketServer {
     const wss = new WebSocketServer({ noServer: true });
     wss.on("connection", (socket: WebSocket) => {
       let id: string | undefined;
@@ -142,7 +142,7 @@ export class WorkerRegistry {
             expiresAt,
             status: "idle",
           });
-          this.send(socket, { t: "registered", workerId: id, projectName: projectName(), expiresAt });
+          this.send(socket, { t: "registered", workerId: id, hostLabel: hostLabel(), expiresAt });
           if (verbose) console.log(`[mysteron] guest joined: ${msg.label} (${id}), expires ${expiresAt}`);
           bus.emitWorkers();
         } else if (msg.t === "heartbeat" && id) {

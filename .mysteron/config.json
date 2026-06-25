@@ -14,5 +14,10 @@
       "role": "soloist",
       "avatarSeed": "Waldorf the Compiler"
     }
-  ]
+  ],
+  "pluginOptions": {
+    "usage-monitor": {
+      "tokenLimit": 20000000
+    }
+  }
 }

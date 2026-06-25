@@ -25,7 +25,7 @@ export interface GuestStatus {
   state: "connecting" | "offered" | "rejected" | "stopped";
   hostUrl: string;
   label: string;
-  projectName?: string;
+  hostLabel?: string;
   expiresAt?: string;
   message?: string;
   activeRuns: number;
@@ -54,7 +54,7 @@ export class GuestConnection {
   private deadline = 0;
   private state: GuestStatus["state"] = "connecting";
   private message?: string;
-  private projectName?: string;
+  private hostLabel?: string;
   private expiresAt?: string;
   private active = 0;
 
@@ -82,7 +82,7 @@ export class GuestConnection {
       state: this.state,
       hostUrl: this.hostUrl,
       label: this.label,
-      projectName: this.projectName,
+      hostLabel: this.hostLabel,
       expiresAt: this.expiresAt,
       message: this.message,
       activeRuns: this.active,
@@ -147,9 +147,9 @@ export class GuestConnection {
         return;
       }
       if (msg.t === "registered") {
-        this.projectName = msg.projectName;
+        this.hostLabel = msg.hostLabel;
         this.expiresAt = msg.expiresAt;
-        this.set("offered", `Offered to "${msg.projectName}" until ${new Date(msg.expiresAt).toLocaleString()}.`);
+        this.set("offered", `Offered to host "${msg.hostLabel}" until ${new Date(msg.expiresAt).toLocaleString()}.`);
       } else if (msg.t === "rejected") {
         this.set("rejected", msg.reason);
         this.stop(`Rejected: ${msg.reason}`);

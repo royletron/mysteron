@@ -247,7 +247,7 @@ export interface GuestOfferStatus {
   state: "connecting" | "offered" | "rejected" | "stopped";
   hostUrl: string;
   label: string;
-  projectName?: string;
+  hostLabel?: string;
   expiresAt?: string;
   message?: string;
   activeRuns: number;

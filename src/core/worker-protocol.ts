@@ -48,7 +48,12 @@ export type GuestMsg = RegisterMsg | HeartbeatMsg | RunLineMsg | RunDoneMsg;
 export interface RegisteredMsg {
   t: "registered";
   workerId: string;
-  projectName: string;
+  /**
+   * Identifies the host the guest joined. A guest serves the whole host (every
+   * project's autopilot pulls from one shared pool), so this is a host label —
+   * not a single project the guest is pinned to.
+   */
+  hostLabel: string;
   expiresAt: string;
 }
 
