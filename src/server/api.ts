@@ -380,9 +380,10 @@ export function registerApi(
   app.patch("/api/projects/:id/config", async (req: Request, res: Response) => {
     const r = await resolve(req.params.id);
     if (!r) return notFound(res);
-    const { yolo, recipe, allowedTools, disallowedTools, regenerateCompanionId, pluginOptions, addCompanion, deleteCompanionId } = (req.body ?? {}) as {
+    const { yolo, recipe, commit, allowedTools, disallowedTools, regenerateCompanionId, pluginOptions, addCompanion, deleteCompanionId } = (req.body ?? {}) as {
       yolo?: boolean;
       recipe?: string;
+      commit?: ProjectConfig["commit"] | null;
       allowedTools?: string[];
       disallowedTools?: string[];
       regenerateCompanionId?: string;
@@ -392,6 +393,20 @@ export function registerApi(
     };
     const next = { ...r.config, companions: [...r.config.companions] };
     if (typeof yolo === "boolean") next.yolo = yolo;
+    // Commit strategy: which branch completed work lands on (local + guest alike).
+    if (commit !== undefined) {
+      if (commit === null) {
+        delete next.commit;
+      } else if (commit.mode === "main" || commit.mode === "branch" || commit.mode === "per-ticket") {
+        next.commit = {
+          mode: commit.mode,
+          ...(commit.branch ? { branch: String(commit.branch).trim() } : {}),
+          ...(commit.branchPrefix ? { branchPrefix: String(commit.branchPrefix).trim() } : {}),
+        };
+      } else {
+        return res.status(400).json({ error: `unknown commit mode: ${(commit as { mode?: string }).mode}` });
+      }
+    }
     if (Array.isArray(allowedTools)) next.allowedTools = allowedTools.map(String).filter((t) => t.trim());
     if (Array.isArray(disallowedTools)) next.disallowedTools = disallowedTools.map(String).filter((t) => t.trim());
     if (pluginOptions !== undefined) next.pluginOptions = pluginOptions;

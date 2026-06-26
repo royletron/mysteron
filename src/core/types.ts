@@ -74,11 +74,35 @@ export interface CompanionConfig {
   recipe?: string;
 }
 
+/**
+ * Where a project's completed work gets committed. An explicit per-project
+ * choice that both local and remote (guest) runs honour, so the whole project
+ * lands work the same way regardless of which machine produced it:
+ *  - "main"       — always commit to the `main` branch.
+ *  - "branch"     — always commit to a named branch (see {@link CommitStrategy.branch}).
+ *  - "per-ticket" — create a dedicated branch per ticket for the user to review and merge.
+ * When unset, the recipe's git behaviour is used (back-compat).
+ */
+export type CommitMode = "main" | "branch" | "per-ticket";
+
+export interface CommitStrategy {
+  mode: CommitMode;
+  /** Target branch name when mode is "branch" (editable). Defaults to "main". */
+  branch?: string;
+  /** Branch-name prefix when mode is "per-ticket" (default "mysteron/"). */
+  branchPrefix?: string;
+}
+
 export interface ProjectConfig {
   id: string;
   name: string;
   /** The chosen agent-team recipe (drives the companion roster). */
   recipe: string;
+  /**
+   * How completed work is committed. When set, overrides the recipe's git
+   * behaviour and applies identically to local and guest runs.
+   */
+  commit?: CommitStrategy;
   /** The project's companions, one per role in the recipe. */
   companions: Companion[];
   /** Enabled plugin ids. */

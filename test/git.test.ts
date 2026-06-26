@@ -7,7 +7,7 @@ import { promisify } from "node:util";
 import { after, test } from "node:test";
 
 const exec = promisify(execFile);
-const { captureSnapshotRef, releaseSnapshotRef, landGuestPatch, listBranches, mergeBranch, deleteBranch, commitBoardChanges, unmergedBranchTicketIds, recentCommits, originStatus, pushCurrentBranch } =
+const { captureSnapshotRef, releaseSnapshotRef, landGuestPatch, listBranches, mergeBranch, deleteBranch, commitBoardChanges, unmergedBranchTicketIds, recentCommits, originStatus, pushCurrentBranch, isGitRepo, addRunWorktree, removeRunWorktree, worktreeRunPatch } =
   await import("../src/core/git.js");
 
 const roots: string[] = [];
@@ -114,6 +114,80 @@ test("landGuestPatch 3-way merges when the host moved on after dispatch", async 
   assert.equal(res.ok, true);
   assert.equal(res.mode, "current-branch");
   assert.equal(await read(root, "a.txt"), "L1\nl2\nL3\n");
+});
+
+test("landGuestPatch (target-branch) commits onto the named branch when it's the checkout", async () => {
+  const root = await makeRepo();
+  const patch = await guestPatch(root);
+  const cur = (await git(root, "rev-parse", "--abbrev-ref", "HEAD")).stdout.trim();
+
+  const res = await landGuestPatch(root, { runId: "tb1", ticketId: "t1", patch, message: "m", strategy: "target-branch", targetBranch: cur });
+
+  assert.equal(res.ok, true);
+  assert.equal(res.mode, "current-branch"); // target IS the checkout → lands in the working tree
+  assert.equal(await read(root, "b.txt"), "new file\n");
+});
+
+test("landGuestPatch (target-branch) lands on a non-checked-out branch and leaves the checkout alone", async () => {
+  const root = await makeRepo();
+  await git(root, "branch", "develop"); // target exists, but we stay on the default branch
+  const patch = await guestPatch(root);
+  const head0 = (await git(root, "rev-parse", "HEAD")).stdout.trim();
+
+  const res = await landGuestPatch(root, { runId: "tb2", ticketId: "t2", patch, message: "m", strategy: "target-branch", targetBranch: "develop" });
+
+  assert.equal(res.ok, true);
+  assert.equal(res.mode, "branch");
+  assert.equal(res.branch, "develop");
+  // checkout + working tree untouched...
+  assert.equal((await git(root, "rev-parse", "HEAD")).stdout.trim(), head0);
+  assert.equal(await read(root, "a.txt"), "hello\n");
+  // ...but the work waits on develop, fast-forwarded from the base it was built on.
+  assert.equal((await git(root, "show", "develop:b.txt")).stdout, "new file\n");
+  assert.equal((await git(root, "rev-list", "--count", `${head0}..develop`)).stdout.trim(), "1");
+});
+
+test("landGuestPatch (target-branch) creates the target branch when it doesn't exist", async () => {
+  const root = await makeRepo();
+  const patch = await guestPatch(root);
+
+  const res = await landGuestPatch(root, { runId: "tb3", ticketId: "t3", patch, message: "m", strategy: "target-branch", targetBranch: "release" });
+
+  assert.equal(res.ok, true);
+  assert.equal(res.mode, "branch");
+  assert.equal(res.branch, "release");
+  assert.equal((await git(root, "show", "release:b.txt")).stdout, "new file\n");
+});
+
+test("isGitRepo distinguishes a repo from a plain directory", async () => {
+  const root = await makeRepo();
+  assert.equal(await isGitRepo(root), true);
+  const plain = await fs.mkdtemp(path.join(os.tmpdir(), "mysteron-nogit-"));
+  roots.push(plain);
+  assert.equal(await isGitRepo(plain), false);
+});
+
+test("addRunWorktree + worktreeRunPatch isolate a run and produce a landable patch", async () => {
+  const root = await makeRepo();
+  const baseRef = await captureSnapshotRef(root, "wrun1");
+  const wt = await addRunWorktree(root, baseRef, "wrun1");
+
+  // The agent works in its own checkout, never the shared one.
+  await fs.writeFile(path.join(wt.dir, "b.txt"), "from worktree\n"); // new file
+  await fs.writeFile(path.join(wt.dir, "a.txt"), "edited in worktree\n"); // tracked edit
+  const { patch } = await worktreeRunPatch(wt.dir, wt.baseSha);
+  assert.match(patch, /b\.txt/);
+
+  // Landing it on the host mirrors the guest path exactly.
+  const res = await landGuestPatch(root, { runId: "wrun1", ticketId: "t1", patch, message: "m", strategy: "current-branch" });
+  assert.equal(res.ok, true);
+  assert.equal(await read(root, "b.txt"), "from worktree\n");
+  assert.equal(await read(root, "a.txt"), "edited in worktree\n");
+
+  await removeRunWorktree(root, wt.dir, wt.branch);
+  await releaseSnapshotRef(root, "wrun1");
+  assert.equal((await git(root, "worktree", "list")).stdout.includes(wt.dir), false);
+  assert.equal((await listBranches(root)).some((b) => b.name === wt.branch), false);
 });
 
 test("landGuestPatch always saves the raw patch for recovery", async () => {

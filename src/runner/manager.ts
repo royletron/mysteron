@@ -6,9 +6,18 @@ import { nanoid } from "nanoid";
 import { bus, type RunLine } from "../core/events.js";
 import { updateTicket } from "../core/board.js";
 import { readDoc } from "../core/docs.js";
-import { findRecipe, gitInstruction } from "../core/recipes.js";
+import { findRecipe, gitInstruction, resolveProjectGit } from "../core/recipes.js";
 import { loadProjectConfig } from "../core/project.js";
-import { captureSnapshotRef, landGuestPatch, releaseSnapshotRef } from "../core/git.js";
+import {
+  addRunWorktree,
+  captureSnapshotRef,
+  isGitRepo,
+  landGuestPatch,
+  releaseSnapshotRef,
+  removeRunWorktree,
+  worktreeRunPatch,
+  type RunWorktree,
+} from "../core/git.js";
 import { defaultCompanion, getCompanion, readCompanionSpec } from "../core/companions.js";
 import type { WorkerRegistry, GuestRunResult } from "../server/workers.js";
 import { ETIQUETTE_DOC, SPEC_DOC, runsDir } from "../core/paths.js";
@@ -348,7 +357,7 @@ export function buildPrompt(
     ...images,
     ``,
     `# Git`,
-    gitInstruction(recipe.git),
+    gitInstruction(resolveProjectGit(config)),
     comp ? `When you commit, add a trailer line \`Mysteron-Companion: ${comp.name}\` so the work is attributed to you in Mysteron.` : "",
     ...team,
     ``,
@@ -390,6 +399,8 @@ export class RunManager {
   private waiters = new Map<string, ((run: Run) => void)[]>();
   /** runId -> last incremental-persist time (ms), to throttle disk writes. */
   private lastPersist = new Map<string, number>();
+  /** runId -> isolated worktree a local run executes in (when the project is a git repo). */
+  private isolation = new Map<string, RunWorktree>();
 
   get(id: string): Run | undefined {
     return this.runs.get(id);
@@ -560,11 +571,17 @@ export class RunManager {
     bus.emitRun({ kind: "started", runId: run.id, projectId: run.projectId, ticketId: run.ticketId });
     bus.emitEvent({ type: "board-changed", projectId: run.projectId, detail: run.ticketId });
     this.append(run, "system", `▶ ${display}`);
-    this.append(run, "system", `cwd: ${args.projectRoot}`);
+
+    // Isolate the run in its own worktree off a snapshot of the project, so
+    // parallel companions don't see or commit each other's half-finished work.
+    // The result is landed via landGuestPatch — the same strategy-aware path
+    // guests use. Falls back to running in place when this isn't a git repo.
+    const workdir = await this.setUpIsolation(run, args.projectRoot);
+    this.append(run, "system", `cwd: ${workdir}`);
     void this.persist(run); // initial record, so even a crashed run leaves history
 
     const child = spawn(cmd, cmdArgs, {
-      cwd: args.projectRoot,
+      cwd: workdir,
       shell,
       env: {
         ...process.env,
@@ -607,10 +624,127 @@ export class RunManager {
     child.on("close", (code) => {
       if (run.status !== "running") return; // already stopped
       this.append(run, "system", `■ agent exited with code ${code}`);
-      this.finish(run, code === 0 ? "done" : "failed", code);
+      if (this.isolation.has(run.id)) {
+        void this.landLocalRun(run, code);
+      } else {
+        this.finish(run, code === 0 ? "done" : "failed", code);
+      }
     });
 
     return run;
+  }
+
+  /**
+   * Prepare an isolated worktree for a local run and return the directory to run
+   * the agent in. When the project is a git repo, snapshots the working tree and
+   * checks it out in a per-run worktree (with the host's node_modules symlinked
+   * in). Any failure falls back to running directly in the project root.
+   */
+  private async setUpIsolation(run: Run, projectRoot: string): Promise<string> {
+    if (!(await isGitRepo(projectRoot))) return projectRoot;
+    try {
+      const baseRef = await captureSnapshotRef(projectRoot, run.id);
+      const wt = await addRunWorktree(projectRoot, baseRef, run.id);
+      this.isolation.set(run.id, wt);
+      await this.linkNodeModules(projectRoot, wt.dir);
+      this.append(run, "system", "⎇ isolated in a worktree off a snapshot of the project");
+      return wt.dir;
+    } catch (e) {
+      this.isolation.delete(run.id);
+      await releaseSnapshotRef(projectRoot, run.id).catch(() => undefined);
+      this.append(run, "system", `⚠ couldn't isolate the run (${(e as Error).message}); running in place`);
+      return projectRoot;
+    }
+  }
+
+  /**
+   * Symlink the host's node_modules into an isolated worktree so builds/tests run
+   * without a fresh install (the snapshot excludes node_modules — it's gitignored).
+   * Best-effort: a ticket that changes dependencies can still `npm install` itself.
+   */
+  private async linkNodeModules(projectRoot: string, workdir: string): Promise<void> {
+    const src = path.join(projectRoot, "node_modules");
+    try {
+      await fs.access(src);
+    } catch {
+      return; // host has no installed deps to share
+    }
+    await fs.symlink(src, path.join(workdir, "node_modules"), "dir").catch(() => undefined);
+  }
+
+  /**
+   * A local isolated run finished — land its diff via the same strategy-aware
+   * path guests use, then tear the worktree down. On a clean exit with applied
+   * work the ticket goes to review; a patch that won't apply returns it to ready.
+   */
+  private async landLocalRun(run: Run, code: number | null): Promise<void> {
+    const wt = this.isolation.get(run.id);
+    let applied = false;
+    let landFailed = false;
+    if (wt && code === 0) {
+      try {
+        const { patch, commitMessage } = await worktreeRunPatch(wt.dir, wt.baseSha);
+        if (patch.trim()) {
+          const config = await loadProjectConfig(run.projectRoot);
+          const git = config ? resolveProjectGit(config) : { strategy: "current-branch" as const };
+          const { message, trailer } = guestLandMessage(commitMessage, run.ticketTitle, run.companion);
+          const res = await landGuestPatch(run.projectRoot, {
+            runId: run.id,
+            ticketId: run.ticketId,
+            patch,
+            message,
+            trailer,
+            strategy: git.strategy,
+            targetBranch: git.targetBranch,
+            branchPrefix: git.branchPrefix,
+          });
+          run.patchPath = res.patchPath;
+          if (res.ok && res.mode === "current-branch") {
+            applied = true;
+            this.append(run, "system", `✓ changes committed to the current branch (${res.commit?.slice(0, 8)})`);
+          } else if (res.ok) {
+            applied = true;
+            run.branch = res.branch;
+            this.append(
+              run,
+              "system",
+              `✓ changes committed to branch ${res.branch} (${res.commit?.slice(0, 8)}) — \`git merge ${res.branch}\` to bring them into your branch`,
+            );
+          } else {
+            landFailed = true;
+            this.append(
+              run,
+              "system",
+              `✖ could not apply the run's patch (${res.error}). The diff is saved at ${res.patchPath} — \`git apply --3way "${res.patchPath}"\` to apply it manually.`,
+            );
+          }
+        } else {
+          this.append(run, "system", "ℹ agent finished but made no file changes.");
+        }
+      } catch (e) {
+        landFailed = true;
+        this.append(run, "system", `✖ failed to land the run: ${(e as Error).message}`);
+      }
+    }
+
+    // Mirror the guest path: applied work goes to review; a failed apply returns
+    // the ticket to ready to retry. (A clean run with no changes leaves whatever
+    // state the agent set via the board MCP.)
+    if (applied) {
+      await updateTicket(run.projectRoot, run.ticketId, { state: "review" }).catch(() => undefined);
+    } else if (landFailed) {
+      await updateTicket(run.projectRoot, run.ticketId, { state: "ready" }).catch(() => undefined);
+    }
+    this.finish(run, code === 0 ? "done" : "failed", code);
+  }
+
+  /** Tear down a run's isolated worktree and snapshot ref (best-effort, idempotent). */
+  private async teardownIsolation(runId: string, projectRoot: string): Promise<void> {
+    const wt = this.isolation.get(runId);
+    if (!wt) return;
+    this.isolation.delete(runId);
+    await removeRunWorktree(projectRoot, wt.dir, wt.branch).catch(() => undefined);
+    await releaseSnapshotRef(projectRoot, runId).catch(() => undefined);
   }
 
   stop(id: string): boolean {
@@ -718,10 +852,10 @@ export class RunManager {
     let applied = false;
     const patch = result.patchBase64 ? Buffer.from(result.patchBase64, "base64").toString("utf8") : "";
     if (result.status === "done" && patch.trim()) {
-      // Land the work the same way a local run would under this project's recipe:
-      // onto the current branch, or a dedicated one (see landGuestPatch).
+      // Land the work the same way a local run does, under this project's commit
+      // strategy: onto the current/target branch, or a dedicated one (see landGuestPatch).
       const config = await loadProjectConfig(run.projectRoot);
-      const git = (config && findRecipe(config.recipe)?.git) ?? { strategy: "current-branch" as const };
+      const git = config ? resolveProjectGit(config) : { strategy: "current-branch" as const };
       const { message, trailer } = guestLandMessage(result.commitMessage, run.ticketTitle, run.companion);
       const res = await landGuestPatch(run.projectRoot, {
         runId: run.id,
@@ -730,6 +864,7 @@ export class RunManager {
         message,
         trailer,
         strategy: git.strategy,
+        targetBranch: git.targetBranch,
         branchPrefix: git.branchPrefix,
       });
       run.patchPath = res.patchPath;
@@ -849,6 +984,9 @@ export class RunManager {
     run.endedAt = new Date().toISOString();
     this.procs.delete(run.id);
     this.lastPersist.delete(run.id);
+    // Clean up any isolated worktree (landLocalRun has already read it by now;
+    // stop()/launch failures land here without landing — either way it's gone).
+    void this.teardownIsolation(run.id, run.projectRoot);
 
     // The agent hit a usage/spend/rate limit — it didn't finish, so put the
     // ticket back on Ready to be retried once the limit resets.

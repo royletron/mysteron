@@ -52,10 +52,19 @@ export interface Companion {
   avatarSeed: string;
 }
 
+export type CommitMode = "main" | "branch" | "per-ticket";
+
+export interface CommitStrategy {
+  mode: CommitMode;
+  branch?: string;
+  branchPrefix?: string;
+}
+
 export interface ProjectConfig {
   id: string;
   name: string;
   recipe: string;
+  commit?: CommitStrategy;
   companions: Companion[];
   plugins: string[];
   yolo: boolean;

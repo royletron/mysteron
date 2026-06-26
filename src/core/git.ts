@@ -68,9 +68,75 @@ export async function releaseSnapshotRef(root: string, runId: string): Promise<v
   await exec("git", ["-C", root, "update-ref", "-d", snapRef(runId)]).catch(() => undefined);
 }
 
+/** Whether `root` is inside a git work tree (so we can isolate runs in a worktree). */
+export async function isGitRepo(root: string): Promise<boolean> {
+  return exec("git", ["-C", root, "rev-parse", "--is-inside-work-tree"])
+    .then(({ stdout }) => stdout.trim() === "true")
+    .catch(() => false);
+}
+
+export interface RunWorktree {
+  /** The isolated checkout directory the agent runs in. */
+  dir: string;
+  /** The throwaway branch the worktree is checked out on. */
+  branch: string;
+  /** The commit the worktree started at — the base the run's diff is taken against. */
+  baseSha: string;
+}
+
+/**
+ * Create an isolated git worktree at `ref` for a local run, so an agent works in
+ * its own checkout rather than the shared one. Mirrors the guest's throwaway
+ * repo: the run's changes are diffed against `baseSha` and landed via
+ * {@link landGuestPatch}. Tear it down with {@link removeRunWorktree}.
+ */
+export async function addRunWorktree(root: string, ref: string, runId: string): Promise<RunWorktree> {
+  const dir = path.join(os.tmpdir(), `mysteron-run-${runId}`);
+  const branch = `mysteron/_run-${runId}`;
+  await exec("git", ["-C", root, "worktree", "add", "-q", "-b", branch, dir, ref], { maxBuffer: 64 << 20 });
+  const baseSha = (await exec("git", ["-C", dir, "rev-parse", "HEAD"])).stdout.trim();
+  return { dir, branch, baseSha };
+}
+
+/** Remove a run worktree and its throwaway branch (best-effort, idempotent). */
+export async function removeRunWorktree(root: string, dir: string, branch: string): Promise<void> {
+  await exec("git", ["-C", root, "worktree", "remove", "--force", dir]).catch(() => undefined);
+  await exec("git", ["-C", root, "branch", "-D", branch]).catch(() => undefined);
+}
+
+/**
+ * Diff an isolated run worktree against its base, returning a binary patch (like
+ * the guest's `git diff base HEAD`) plus the agent's own commit message(s) for
+ * landing. Uncommitted work is committed first so nothing is lost. Returns an
+ * empty patch when the run produced no file changes.
+ */
+export async function worktreeRunPatch(
+  dir: string,
+  baseSha: string,
+): Promise<{ patch: string; commitMessage?: string }> {
+  const g = (args: string[]) => exec("git", ["-C", dir, ...args], { maxBuffer: 256 << 20 });
+  const ident = ["-c", "user.name=Mysteron", "-c", "user.email=mysteron@local"];
+
+  // Preserve the agent's own commit message(s) before flattening to a diff.
+  const agentCommits = Number((await g(["rev-list", "--count", `${baseSha}..HEAD`])).stdout.trim()) || 0;
+  let commitMessage: string | undefined;
+  if (agentCommits > 0) {
+    commitMessage = (await g(["log", "--format=%B", "--reverse", `${baseSha}..HEAD`])).stdout.trim() || undefined;
+  }
+
+  // Capture anything left uncommitted so the returned diff is complete.
+  await g(["add", "-A"]);
+  const pending = (await g(["diff", "--cached", "--name-only"])).stdout.trim();
+  if (pending) {
+    await g([...ident, "commit", "-q", "-m", agentCommits > 0 ? "chore: capture uncommitted changes" : "work"]);
+  }
+  const patch = (await g(["diff", "--binary", baseSha, "HEAD"])).stdout;
+  return { patch, commitMessage };
+}
+
 export interface LandResult {
   ok: boolean;
-  /** How the work landed: on the checked-out branch, on a dedicated branch, or not at all. */
+  /** How the work landed: into the checked-out branch's working tree, on a (dedicated or named) branch, or not at all. */
   mode: "current-branch" | "branch" | "failed";
   branch?: string;
   commit?: string;
@@ -86,19 +152,23 @@ async function refExists(root: string, ref: string): Promise<boolean> {
 }
 
 /**
- * Land a guest's returned diff on the host, mirroring how a local run commits
- * under the project's git strategy:
- *  - "current-branch": fast-forward the checked-out branch onto the guest's
- *    commit, so the work lands in the host's working tree — but only when that
- *    tree is clean, so in-progress edits are never disturbed.
- *  - "new-branch" (or a current-branch fallback when the tree is dirty / can't
- *    fast-forward): leave the commit on a dedicated <prefix><ticket> branch for
- *    review.
+ * Land a guest's or local run's returned diff on the host, under the project's
+ * git strategy:
+ *  - "current-branch": fast-forward the checked-out branch onto the commit, so
+ *    the work lands in the host's working tree — but only when that tree is
+ *    clean, so in-progress edits are never disturbed.
+ *  - "target-branch": land on a specific named branch (e.g. `main`). When that
+ *    branch is the one checked out, this behaves like "current-branch"; when it
+ *    isn't, the commit is built on top of that branch and its ref advanced, so
+ *    the work waits there for the user — the checkout is untouched either way.
+ *  - "new-branch" (or a fallback when the target/current branch is dirty or
+ *    can't fast-forward): leave the commit on a dedicated <prefix><ticket>
+ *    branch for review.
  *
- * The commit is always built in a throwaway worktree off HEAD (the checkout is
- * never touched while building it), and `git apply --3way` merges the guest's
- * delta even when the host has moved on since dispatch. The raw patch is saved
- * first, so a failed apply still leaves the work recoverable.
+ * The commit is built in a throwaway worktree (the checkout is never touched
+ * while building it), and `git apply --3way` merges the delta even when the host
+ * has moved on since dispatch. The raw patch is saved first, so a failed apply
+ * still leaves the work recoverable.
  */
 export async function landGuestPatch(
   root: string,
@@ -108,7 +178,9 @@ export async function landGuestPatch(
     patch: string;
     message: string;
     trailer?: string;
-    strategy: "current-branch" | "new-branch";
+    strategy: "current-branch" | "new-branch" | "target-branch";
+    /** Named branch to land on when strategy is "target-branch". */
+    targetBranch?: string;
     branchPrefix?: string;
   },
 ): Promise<LandResult> {
@@ -122,12 +194,18 @@ export async function landGuestPatch(
   await fs.mkdir(patchDir, { recursive: true });
   await fs.writeFile(patchPath, opts.patch, "utf8");
 
-  // Build the commit in an isolated worktree off HEAD — never touches the checkout.
+  // Build the commit on top of the right base: for "target-branch" that's the
+  // named branch (so advancing its ref is a clean fast-forward); otherwise HEAD.
+  const current = await currentBranch(root);
+  const target = opts.strategy === "target-branch" ? (opts.targetBranch || "main") : undefined;
+  const buildBase = target && target !== current && (await refExists(root, target)) ? target : "HEAD";
+
+  // Build the commit in an isolated worktree — never touches the checkout.
   const wt = path.join(os.tmpdir(), `mysteron-apply-${opts.runId}`);
   const tmpBranch = `mysteron/_apply-${opts.runId}`;
   let commit: string;
   try {
-    await git(["-C", root, "worktree", "add", "-q", "-b", tmpBranch, wt, "HEAD"]);
+    await git(["-C", root, "worktree", "add", "-q", "-b", tmpBranch, wt, buildBase]);
     await git(["-C", wt, "apply", "--3way", "--binary", "--whitespace=nowarn", patchPath]);
     await git(["-C", wt, "add", "-A"]);
     await git(["-C", wt, ...ident, "commit", "-q", "-m", msg]);
@@ -140,10 +218,22 @@ export async function landGuestPatch(
   // The commit now lives in the object db on tmpBranch; the worktree is done.
   await exec("git", ["-C", root, "worktree", "remove", "--force", wt]).catch(() => undefined);
 
-  // current-branch: fast-forward the checked-out branch onto the commit, but only
-  // when its tracked files are clean (a dirty tree / collision means we fall back
-  // to a named branch rather than risk the user's work).
-  if (opts.strategy === "current-branch") {
+  // target-branch onto a branch that ISN'T checked out: advance its ref to the
+  // commit (built on top of it, so this is a fast-forward) and leave the checkout
+  // alone. The work waits on `target` for the user to merge.
+  if (target && target !== current) {
+    const moved = await git(["-C", root, "branch", "-f", target, commit]).then(() => true).catch(() => false);
+    if (moved) {
+      await git(["-C", root, "branch", "-D", tmpBranch]).catch(() => undefined);
+      return { ok: true, mode: "branch", branch: target, commit, patchPath };
+    }
+    // couldn't move it — fall through to a dedicated review branch.
+  }
+
+  // current-branch (or target-branch where target IS the checkout): fast-forward
+  // the checked-out branch onto the commit, but only when its tracked files are
+  // clean (a dirty tree / collision falls back to a named branch instead).
+  if (opts.strategy === "current-branch" || (target && target === current)) {
     const dirty = (await git(["-C", root, "status", "--porcelain", "--untracked-files=no"])).stdout.trim().length > 0;
     if (!dirty) {
       try {
@@ -156,7 +246,7 @@ export async function landGuestPatch(
     }
   }
 
-  // new-branch, or current-branch fallback: keep the commit on a dedicated branch.
+  // new-branch, or a fallback: keep the commit on a dedicated branch.
   const prefix = (opts.branchPrefix ?? "mysteron/").replace(/\/?$/, "/");
   let branch = `${prefix}${opts.ticketId}`;
   if (await refExists(root, branch)) branch = `${prefix}${opts.ticketId}-${opts.runId}`;
