@@ -1,13 +1,16 @@
 ---
 title: Consider moving companion list + actions into a sidebar
-state: backlog
+state: ready
 priority: low
+companionId: 82be1826-9999-453f-bbfc-999f8dc4a2dc
 createdBy: 82be1826-9999-453f-bbfc-999f8dc4a2dc
+assignee: Zoot the Swift
 labels:
   - ui
   - follow-up
 created: '2026-06-26T11:07:49.300Z'
-updated: '2026-06-26T11:07:49.300Z'
+updated: '2026-06-26T11:28:01.613Z'
+order: 0
 ---
 
 Follow-up from `c4LHNUy-` (Companion Runs On). That ticket noted we "might need to rejig the companion list / move actions into the side bar".

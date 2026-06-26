@@ -6,8 +6,8 @@ companionId: 82be1826-9999-453f-bbfc-999f8dc4a2dc
 assignee: Zoot the Swift
 labels: []
 created: '2026-06-26T10:39:12.786Z'
-updated: '2026-06-26T11:08:04.089Z'
-order: 2
+updated: '2026-06-26T11:27:04.079Z'
+order: 5
 ---
 
 Can we have a selector on the companion for which 'hosts' it will run 

@@ -6,8 +6,8 @@ companionId: c1bf55fe-3e93-410d-94a7-cfde4dc1f80e
 assignee: Waldorf the Compiler
 labels: []
 created: '2026-06-26T09:19:46.787Z'
-updated: '2026-06-26T09:23:27.165Z'
-order: 0
+updated: '2026-06-26T11:27:04.072Z'
+order: 3
 ---
 
 Just so it's super clear to me, could we offer a countdown on the autopilot for when it'll attempt to resume? Ideally it should update, but be prepared for days, hours, mins, seconds etc.

@@ -1,6 +1,6 @@
 ---
 title: Isolate local runs (implement chosen worker-isolation option)
-state: ready
+state: review
 priority: high
 createdBy: c1bf55fe-3e93-410d-94a7-cfde4dc1f80e
 assignee: Waldorf the Compiler
@@ -8,8 +8,8 @@ labels:
   - enhancement
   - needs-decision
 created: '2026-06-26T10:15:52.771Z'
-updated: '2026-06-26T10:57:37.985Z'
-order: 1
+updated: '2026-06-26T11:27:04.069Z'
+order: 2
 ---
 
 Follow-up to `iTunKOwa`. See `.mysteron/docs/WORKER-ISOLATION.md` for the full analysis and four options.

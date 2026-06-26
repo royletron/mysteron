@@ -1,12 +1,12 @@
 ---
 title: Isolate Local Run
-state: ready
+state: review
 priority: medium
 companionId: 82be1826-9999-453f-bbfc-999f8dc4a2dc
 assignee: Zoot the Swift
 labels: []
 created: '2026-06-26T10:34:18.445Z'
-updated: '2026-06-26T10:53:59.485Z'
+updated: '2026-06-26T11:32:51.046Z'
 order: 1
 ---
 
@@ -23,3 +23,18 @@ Can we make sure that we are following the commit strategy for the project - we 
 3. Always create a branch per ticket, which is then up to the user to review and merge
 
 Once selected, both local and remote changes need to adhere to this.
+
+---
+
+## Progress — Zoot the Swift
+
+Most of Option A was already in place on the current branch and covered by tests:
+
+- **Worktree isolation** — local runs no longer use `cwd: projectRoot`. `RunManager.setUpIsolation` snapshots the working tree (`captureSnapshotRef`), checks it out in a per-run `git worktree` (`addRunWorktree`), runs the agent there, and lands the diff through the same `landGuestPatch` guests use. Worktrees are torn down on finish (`teardownIsolation`); falls back to running in place for non-git projects.
+- **Commit strategy as an explicit project option** — `ProjectConfig.commit` (`CommitStrategy`) with the three requested modes: `main`, `branch` (editable name), `per-ticket`. `resolveProjectGit` resolves it over the recipe default, and **both** `landLocalRun` and `applyGuestResult` (local + remote) commit through it, so the choice applies everywhere. Editable in the web UI (Commit-strategy card), settable via `PATCH /api/projects/:id/config`, and reflected in the agent prompt (`gitInstruction`).
+
+**What I added this pass:** the missing node_modules step from the recommendation — the install fallback when the lockfile changed. Previously `node_modules` was always symlinked, which is stale (and shared-store-corrupting) when the run's snapshot carries a changed lockfile. `lockfileChange` (in `core/git.ts`) detects a changed lockfile and its package manager; `prepareNodeModules` then installs into the worktree's own `node_modules` instead of symlinking, falling back to the symlink if the install fails. Commit `c0938c9`.
+
+Tests: `npm test` — 91 pass (added two `lockfileChange` cases). `npm run typecheck` clean.
+
+Note: concurrent board (`.mysteron/`) writes remain a separate race, tracked as `__J9CotP` per the design doc — out of scope here.
