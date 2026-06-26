@@ -75,6 +75,8 @@ export interface AutopilotState {
   message?: string;
   currentTicketId?: string;
   currentRunId?: string;
+  /** ISO time the usage window resets; set while paused so the UI can count down to resume. */
+  pausedUntil?: string;
   completed?: number;
   activity?: { at: string; text: string }[];
 }

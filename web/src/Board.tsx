@@ -3,12 +3,13 @@ import {
   AP_STATUS,
   STATE_LABELS,
   api,
+  formatDuration,
   type Companion,
   type ProjectDetail,
   type Ticket,
   type TicketState,
 } from "./api";
-import { navigate } from "./hooks";
+import { navigate, useNow } from "./hooks";
 import { pushToast } from "./Toast";
 import { Avatar } from "./Avatar";
 import { LiveDot, CloudGlyph } from "./ui";
@@ -329,6 +330,19 @@ function TicketCard({
   );
 }
 
+/** Live countdown to when a paused autopilot will next try to resume — ticks every
+ *  second and scales gracefully from days down to seconds (e.g. "2d 3h", "1m 12s"). */
+function ResumeCountdown({ until }: { until: string }) {
+  const now = useNow(true);
+  const remaining = new Date(until).getTime() - now;
+  const label = remaining > 0 ? formatDuration(remaining) : "any moment now";
+  return (
+    <div class="mt-1.5 text-sm text-amber-400">
+      ⏳ Resuming in <span class="tabular-nums font-semibold">{label}</span>
+    </div>
+  );
+}
+
 /** The autopilot status card — only shown while it's running; collapsed otherwise.
  *  Starting/stopping lives in the sticky toolbar (see Project). */
 function AutopilotBar({ detail }: { detail: ProjectDetail }) {
@@ -358,6 +372,8 @@ function AutopilotBar({ detail }: { detail: ProjectDetail }) {
           </a>
         )}
       </div>
+
+      {ap.status === "paused" && ap.pausedUntil && <ResumeCountdown until={ap.pausedUntil} />}
 
       {ap.activity && ap.activity.length > 0 && (
         <div class="mt-2.5 flex flex-col gap-0.5 border-t border-zinc-800 pt-2.5 font-mono text-xs">
