@@ -7,7 +7,7 @@ import { promisify } from "node:util";
 import { after, test } from "node:test";
 
 const exec = promisify(execFile);
-const { captureSnapshotRef, releaseSnapshotRef, landGuestPatch, listBranches, mergeBranch, deleteBranch, commitBoardChanges, unmergedBranchTicketIds, recentCommits, originStatus, pushCurrentBranch, isGitRepo, addRunWorktree, removeRunWorktree, worktreeRunPatch } =
+const { captureSnapshotRef, releaseSnapshotRef, landGuestPatch, listBranches, mergeBranch, deleteBranch, commitBoardChanges, unmergedBranchTicketIds, recentCommits, originStatus, pushCurrentBranch, isGitRepo, addRunWorktree, removeRunWorktree, worktreeRunPatch, lockfileChange } =
   await import("../src/core/git.js");
 
 const roots: string[] = [];
@@ -475,4 +475,30 @@ test("recentCommits flags Mysteron-authored commits and parses the companion tra
   assert.equal(companion.mysteron, false); // test@local author
 
   assert.equal(base.mysteron, false);
+});
+
+test("lockfileChange detects an uncommitted lockfile edit and its package manager", async () => {
+  const root = await makeRepo();
+  await fs.writeFile(path.join(root, "package-lock.json"), '{"lockfileVersion":3}\n');
+  await git(root, "add", "-A");
+  await git(root, "commit", "-q", "-m", "add lockfile");
+
+  // Clean tree: nothing to install for.
+  assert.equal(await lockfileChange(root), null);
+
+  // Tracked edit to the lockfile (e.g. the host bumped a dep but hasn't installed).
+  await fs.writeFile(path.join(root, "package-lock.json"), '{"lockfileVersion":3,"x":1}\n');
+  assert.deepEqual(await lockfileChange(root), { file: "package-lock.json", manager: "npm" });
+});
+
+test("lockfileChange spots a brand-new (untracked) lockfile and prefers pnpm", async () => {
+  const root = await makeRepo();
+  // A change to an ordinary file must not register as a lockfile change.
+  await fs.writeFile(path.join(root, "a.txt"), "edited\n");
+  assert.equal(await lockfileChange(root), null);
+
+  // pnpm wins over npm when both are present (more specific manager).
+  await fs.writeFile(path.join(root, "package-lock.json"), "{}\n");
+  await fs.writeFile(path.join(root, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
+  assert.deepEqual(await lockfileChange(root), { file: "pnpm-lock.yaml", manager: "pnpm" });
 });
