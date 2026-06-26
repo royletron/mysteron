@@ -13,6 +13,12 @@
       "name": "Waldorf the Compiler",
       "role": "soloist",
       "avatarSeed": "Waldorf the Compiler"
+    },
+    {
+      "id": "82be1826-9999-453f-bbfc-999f8dc4a2dc",
+      "name": "Zoot the Swift",
+      "role": "Developer",
+      "avatarSeed": "Zoot the Swift"
     }
   ],
   "pluginOptions": {
