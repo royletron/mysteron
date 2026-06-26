@@ -166,6 +166,7 @@ function AppShell() {
             projectId={route.projectId}
             ticketId={route.ticketId}
             autostart={route.autostart ?? false}
+            runId={route.runId}
             evt={evt}
             onTitle={setTicketTitle}
           />

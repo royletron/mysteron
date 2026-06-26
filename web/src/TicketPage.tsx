@@ -10,7 +10,7 @@ import {
   type RunSummary,
   type Ticket,
 } from "./api";
-import { useAsync, useRunStream } from "./hooks";
+import { useAsync, useRunStream, navigate } from "./hooks";
 import { ErrorBox, LiveDot, Loading, RunTimer, CloudGlyph, RunMachine } from "./ui";
 import { Avatar } from "./Avatar";
 import { AgentLog, AgentThinking } from "./AgentLog";
@@ -27,17 +27,19 @@ export function TicketPage({
   projectId,
   ticketId,
   autostart,
+  runId,
   evt,
   onTitle,
 }: {
   projectId: string;
   ticketId: string;
   autostart: boolean;
+  runId?: string;
   evt: AppEvent;
   onTitle?: (title: string) => void;
 }) {
   const [refresh, setRefresh] = useState(0);
-  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(runId ?? null);
   const [lines, setLines] = useState<RunLine[]>([]);
   const [liveStatus, setLiveStatus] = useState<{ status: RunStatus; exitCode?: number | null } | null>(null);
   // Why the last run attempt couldn't start (e.g. no agent installed, usage
@@ -54,11 +56,28 @@ export function TicketPage({
     api(`/api/projects/${projectId}/tickets/${ticketId}/run`, { method: "POST" })
       .then(() => {
         setStartError(null);
+        setSelectedRunId(null);
         setRefresh((n) => n + 1);
       })
       .catch((e) => setStartError((e as Error).message));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // When the URL-driven runId prop changes (user navigated to a specific run),
+  // update the selection to match.
+  useEffect(() => {
+    if (runId) setSelectedRunId(runId);
+  }, [runId]);
+
+  // Keep the URL in sync with the selected run so it's bookmarkable.
+  useEffect(() => {
+    if (!selectedRunId) return;
+    window.history.replaceState(
+      null,
+      "",
+      `#/project/${projectId}/ticket/${ticketId}/runs/${selectedRunId}`,
+    );
+  }, [selectedRunId, projectId, ticketId]);
 
   const matchSeq = evt.projectId === projectId ? evt.seq : -1;
   const { data, loading, error } = useAsync<TicketData>(async () => {
@@ -225,7 +244,7 @@ export function TicketPage({
       key={r.id}
       title={r.command}
       onClick={() => {
-        setSelectedRunId(r.id);
+        navigate(`#/project/${projectId}/ticket/${ticketId}/runs/${r.id}`);
         setInfoOpen(false);
       }}
       class={`flex flex-col gap-1 rounded-sm border px-2 py-1 text-left text-xs ${

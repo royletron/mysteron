@@ -6,6 +6,7 @@ export interface Route {
   name: "home" | "project" | "ticket" | "settings";
   projectId?: string;
   ticketId?: string;
+  runId?: string;
   tab?: string;
   autostart?: boolean;
 }
@@ -15,7 +16,9 @@ function parseRoute(): Route {
   const parts = hash.split("/").filter(Boolean);
   if (parts[0] === "settings") return { name: "settings" };
   if (parts[0] === "project" && parts[2] === "ticket" && parts[3]) {
-    return { name: "ticket", projectId: parts[1], ticketId: parts[3], autostart: parts[4] === "run" };
+    const autostart = parts[4] === "run";
+    const runId = parts[4] === "runs" && parts[5] ? parts[5] : undefined;
+    return { name: "ticket", projectId: parts[1], ticketId: parts[3], autostart, runId };
   }
   if (parts[0] === "project" && parts[1]) {
     return { name: "project", projectId: parts[1], tab: parts[2] };
