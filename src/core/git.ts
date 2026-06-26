@@ -267,7 +267,13 @@ export async function landGuestPatch(
   // the checked-out branch onto the commit, but only when its tracked files are
   // clean (a dirty tree / collision falls back to a named branch instead).
   if (opts.strategy === "current-branch" || (target && target === current)) {
-    const dirty = (await git(["-C", root, "status", "--porcelain", "--untracked-files=no"])).stdout.trim().length > 0;
+    // Board files (.mysteron/) live in-tree and the app rewrites them on every
+    // ticket move — dispatching this very run flipped the ticket to "in-progress" —
+    // so they're nearly always "dirty". Ignore them here (as mergeBranch does), or
+    // that board write alone would force the work onto a dedicated branch.
+    const dirty = statusEntries(
+      (await git(["-C", root, "status", "--porcelain", "--untracked-files=no"])).stdout,
+    ).some((e) => !isBoardPath(e.path));
     if (!dirty) {
       try {
         await git(["-C", root, "merge", "--ff-only", commit]);
