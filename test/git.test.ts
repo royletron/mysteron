@@ -93,6 +93,26 @@ test("landGuestPatch (current-branch) falls back to a dedicated branch when the 
   assert.equal((await git(root, "show", "mysteron/t3:b.txt")).stdout, "new file\n");
 });
 
+test("landGuestPatch ignores board-only changes and still lands on the checked-out branch", async () => {
+  const root = await makeRepo();
+  // Board files are tracked but the app rewrites them on every ticket move
+  // (this run moved its own ticket to in-progress) — they must not count as "dirty".
+  await fs.mkdir(path.join(root, ".mysteron", "board"), { recursive: true });
+  await fs.writeFile(path.join(root, ".mysteron", "board", "t.md"), "state: ready\n");
+  await git(root, "add", "-A");
+  await git(root, "commit", "-q", "-m", "seed board");
+  await fs.writeFile(path.join(root, ".mysteron", "board", "t.md"), "state: in-progress\n"); // uncommitted board edit
+  const patch = await guestPatch(root);
+
+  const res = await landGuestPatch(root, { runId: "r5", ticketId: "t5", patch, message: "Add stuff", strategy: "current-branch" });
+
+  assert.equal(res.ok, true);
+  assert.equal(res.mode, "current-branch"); // landed in the working tree, not a dedicated branch
+  assert.equal(await read(root, "b.txt"), "new file\n");
+  assert.equal(await read(root, ".mysteron/board/t.md"), "state: in-progress\n"); // board edit preserved
+  assert.equal(await refExists(root, "mysteron/t5"), false);
+});
+
 test("landGuestPatch 3-way merges when the host moved on after dispatch", async () => {
   const root = await makeRepo();
   await fs.writeFile(path.join(root, "a.txt"), "l1\nl2\nl3\n");
