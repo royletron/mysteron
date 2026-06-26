@@ -1,8 +1,12 @@
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { promisify } from "node:util";
 import { after, before, test } from "node:test";
+
+const exec = promisify(execFile);
 
 const tmp = path.join(os.tmpdir(), `mysteron-runner-${process.pid}`);
 process.env.MYSTERON_HOME = path.join(tmp, "home");
@@ -13,6 +17,7 @@ const { initProject } = await import("../src/core/project.js");
 const { createTicket, getTicket } = await import("../src/core/board.js");
 const { RunManager, renderStreamEvent, runResultStats, resolveCommand, buildPrompt, agentBinary, agentAvailable, agentUnavailableMessage, guestLandMessage } = await import("../src/runner/manager.js");
 const { runsDir } = await import("../src/core/paths.js");
+const { resolveProjectGit } = await import("../src/core/recipes.js");
 
 const promptConfig = (recipe?: string) =>
   ({
@@ -68,6 +73,66 @@ test("RunManager runs an agent, claims the ticket and captures output", async ()
   const stderr = finished.lines.filter((l) => l.stream === "stderr").map((l) => l.text);
   assert.ok(stdout.includes("handling: Wire the widget"), "agent received the ticket via env");
   assert.ok(stderr.includes("oops"), "stderr is captured separately");
+});
+
+test("resolveProjectGit maps the project commit strategy, overriding the recipe default", () => {
+  // No explicit strategy → recipe default.
+  assert.deepEqual(resolveProjectGit({ recipe: "solo" }), { strategy: "current-branch", branchPrefix: undefined });
+  assert.deepEqual(resolveProjectGit({ recipe: "research" }), { strategy: "new-branch", branchPrefix: "spike/" });
+
+  // The three explicit options, applied to local + guest alike.
+  assert.deepEqual(resolveProjectGit({ recipe: "solo", commit: { mode: "main" } }), {
+    strategy: "target-branch",
+    targetBranch: "main",
+  });
+  assert.deepEqual(resolveProjectGit({ recipe: "solo", commit: { mode: "branch", branch: "develop" } }), {
+    strategy: "target-branch",
+    targetBranch: "develop",
+  });
+  // An explicit strategy wins even over a new-branch recipe.
+  assert.deepEqual(resolveProjectGit({ recipe: "research", commit: { mode: "per-ticket" } }), {
+    strategy: "new-branch",
+    branchPrefix: "mysteron/",
+  });
+});
+
+test("a local run is isolated in a worktree and its changes land on the current branch", async () => {
+  const proj = path.join(tmp, "isolated");
+  const { config } = await initProject(proj, { name: "Isolated" });
+  // Make it a real git repo so the run is isolated in a per-run worktree.
+  await exec("git", ["-C", proj, "init", "-q"]);
+  await exec("git", ["-C", proj, "config", "user.name", "Test"]);
+  await exec("git", ["-C", proj, "config", "user.email", "test@local"]);
+  await fs.writeFile(path.join(proj, "seed.txt"), "seed\n");
+  await exec("git", ["-C", proj, "add", "-A"]);
+  await exec("git", ["-C", proj, "commit", "-q", "-m", "base"]);
+
+  const ticket = await createTicket(proj, { title: "Make a file", state: "ready" });
+
+  const saved = process.env.MYSTERON_AGENT_CMD;
+  // The agent writes a file into its cwd — which must be the isolated worktree.
+  process.env.MYSTERON_AGENT_CMD = 'echo "isolated work" > made-by-agent.txt';
+  try {
+    const rm = new RunManager();
+    const run = await rm.start({ projectId: config.id, projectRoot: proj, config, ticket });
+    await waitFor(() => rm.get(run.id)?.status !== "running", 15000);
+    assert.equal(rm.get(run.id)?.status, "done");
+
+    // The agent's change landed in the REAL project, via the strategy-aware path.
+    assert.equal(await fs.readFile(path.join(proj, "made-by-agent.txt"), "utf8"), "isolated work\n");
+    // ...and the ticket was moved to review on success.
+    assert.equal((await getTicket(proj, ticket.id))?.state, "review");
+    // The per-run worktree is torn down (no orphaned checkout left behind).
+    let cleaned = false;
+    for (let i = 0; i < 100 && !cleaned; i++) {
+      cleaned = !(await exec("git", ["-C", proj, "worktree", "list"])).stdout.includes("mysteron-run-");
+      if (!cleaned) await new Promise((r) => setTimeout(r, 50));
+    }
+    assert.ok(cleaned, "the per-run worktree was cleaned up");
+  } finally {
+    if (saved !== undefined) process.env.MYSTERON_AGENT_CMD = saved;
+    else delete process.env.MYSTERON_AGENT_CMD;
+  }
 });
 
 test("renderStreamEvent turns Claude stream-json into readable lines", () => {

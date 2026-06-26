@@ -6,6 +6,7 @@ import {
   fmtWhen,
   type BranchInfo,
   type Commit,
+  type CommitMode,
   type Companion,
   type OriginStatus,
   type ProjectConfig,
@@ -531,6 +532,87 @@ function gitLabel(git: Recipe["git"]): string {
     : "discrete commits on current branch";
 }
 
+const COMMIT_MODES: { mode: CommitMode; title: string; desc: string }[] = [
+  { mode: "main", title: "Always commit to main", desc: "Completed work lands on the main branch." },
+  { mode: "branch", title: "Always commit to a branch", desc: "Completed work lands on a branch you name." },
+  {
+    mode: "per-ticket",
+    title: "Branch per ticket",
+    desc: "Each ticket gets its own branch for you to review and merge.",
+  },
+];
+
+/**
+ * Choose where completed work is committed. Both local and guest runs honour it,
+ * so the whole project lands work the same way regardless of which machine ran it.
+ */
+function CommitStrategyCard({ projectId, config }: { projectId: string; config: ProjectConfig }) {
+  const current = config.commit;
+  const [branch, setBranch] = useState(current?.branch ?? "");
+  const [saving, setSaving] = useState<CommitMode | "">("");
+
+  const save = async (mode: CommitMode) => {
+    if (saving) return;
+    const commit = mode === "branch" ? { mode, branch: branch.trim() || "main" } : { mode };
+    setSaving(mode);
+    try {
+      await api(`/api/projects/${projectId}/config`, { method: "PATCH", body: JSON.stringify({ commit }) });
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setSaving("");
+    }
+  };
+
+  return (
+    <div class="card mt-4">
+      <h2 class="text-lg font-semibold">Commit strategy</h2>
+      <p class="text-sm text-zinc-400">
+        Where completed work lands. Applies to both local and guest runs. When unset, the recipe's git
+        behaviour is used.
+      </p>
+      {COMMIT_MODES.map((m) => {
+        const active = current?.mode === m.mode;
+        return (
+          <div
+            key={m.mode}
+            onClick={() => save(m.mode)}
+            class={`mt-1.5 cursor-pointer rounded-sm border px-2.5 py-2 ${
+              active ? "border-violet-500 bg-violet-500/10" : "border-transparent hover:bg-zinc-800/60"
+            }`}
+          >
+            <div class="flex items-center gap-2">
+              <b>{m.title}</b>
+              <div class="flex-1" />
+              {saving === m.mode ? (
+                <span class="text-xs text-zinc-500">saving…</span>
+              ) : active ? (
+                <span class="pill border-violet-500 text-violet-300">✓ active</span>
+              ) : (
+                <span class="text-xs text-zinc-500">Use this</span>
+              )}
+            </div>
+            <div class="text-xs text-zinc-500">{m.desc}</div>
+            {m.mode === "branch" && active && (
+              <div class="mt-2 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                <input
+                  class="input max-w-[220px]"
+                  placeholder="branch name (e.g. develop)"
+                  value={branch}
+                  onInput={(e) => setBranch((e.target as HTMLInputElement).value)}
+                />
+                <button class="btn btn-sm" disabled={saving !== ""} onClick={() => save("branch")}>
+                  Save branch
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function CompanionTab({ detail }: { detail: ProjectDetail }) {
   const c = detail.config;
   const path = detail.entry.path;
@@ -666,6 +748,8 @@ export function CompanionTab({ detail }: { detail: ProjectDetail }) {
           );
         })}
       </div>
+
+      <CommitStrategyCard projectId={detail.entry.id} config={c} />
     </div>
   );
 }
