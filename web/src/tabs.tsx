@@ -1122,10 +1122,10 @@ function CompanionRow({
 
   return (
     <div class="rounded-lg border border-zinc-800 p-2.5">
-      <div class="flex items-center gap-3">
+      <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
         <Avatar companion={companion} size={34} />
-        <div>
-          <div class="font-medium">{companion.name}</div>
+        <div class="min-w-0">
+          <div class="truncate font-medium">{companion.name}</div>
           {activeRun ? (
             <a
               class="inline-flex items-center gap-1.5 text-xs text-emerald-400"
@@ -1140,19 +1140,21 @@ function CompanionRow({
           )}
         </div>
         <div class="flex-1" />
-        <button class="btn btn-sm" onClick={toggleBrief}>
-          {editing ? "Hide brief" : "Edit brief"}
-        </button>
-        <button class="btn btn-sm" disabled={busy} title="Roll a new name + avatar (keeps the session)" onClick={regenerate}>
-          {busy ? "…" : "🎲"}
-        </button>
-        {canDelete && (
-          <button class="btn btn-danger btn-sm" disabled={busy} title="Remove this companion" onClick={remove}>
-            ✕
+        <div class="flex shrink-0 items-center gap-2">
+          <button class="btn btn-sm" onClick={toggleBrief}>
+            {editing ? "Hide brief" : "Edit brief"}
           </button>
-        )}
+          <button class="btn btn-sm" disabled={busy} title="Roll a new name + avatar (keeps the session)" onClick={regenerate}>
+            {busy ? "…" : "🎲"}
+          </button>
+          {canDelete && (
+            <button class="btn btn-danger btn-sm" disabled={busy} title="Remove this companion" onClick={remove}>
+              ✕
+            </button>
+          )}
+        </div>
       </div>
-      <div class="mt-2 flex flex-wrap items-center gap-1.5">
+      <div class="mt-2 flex flex-wrap items-center gap-1.5 border-t border-zinc-800/70 pt-2">
         <span class="text-xs text-zinc-500" title="Which hosts this companion may run on">
           Runs on
         </span>
