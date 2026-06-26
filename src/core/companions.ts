@@ -4,7 +4,7 @@ import path from "node:path";
 import { companionsDir } from "./paths.js";
 import { generateCompanion } from "./names.js";
 import { findRecipe } from "./recipes.js";
-import type { Companion, ProjectConfig } from "./types.js";
+import { LOCAL_HOST, type Companion, type ProjectConfig } from "./types.js";
 
 /**
  * Build a companion roster for a recipe — one companion per role, each with a
@@ -28,6 +28,34 @@ export function defaultCompanion(config: ProjectConfig): Companion | undefined {
 
 export function getCompanion(config: ProjectConfig, id: string | undefined): Companion | undefined {
   return id ? config.companions.find((c) => c.id === id) : undefined;
+}
+
+// --- "Runs on" host selection ------------------------------------------------
+// A companion with no runsOn (or an empty one) may run anywhere; otherwise it
+// only runs on the listed hosts ("local" plus connected guest labels).
+
+/** Whether the companion may run on the local (server) machine. */
+export function companionAllowsLocal(companion: Companion | undefined): boolean {
+  const list = companion?.runsOn;
+  return !list || list.length === 0 || list.includes(LOCAL_HOST);
+}
+
+/** Whether the companion may run on the guest with this label. */
+export function companionAllowsGuest(companion: Companion | undefined, guestLabel: string): boolean {
+  const list = companion?.runsOn;
+  return !list || list.length === 0 || list.includes(guestLabel);
+}
+
+/** True when the companion is pinned to specific hosts (so a run must consult the list). */
+export function companionHasHostPins(companion: Companion | undefined): boolean {
+  return !!companion?.runsOn && companion.runsOn.length > 0;
+}
+
+/** User-facing message when a pinned companion has no listed host free to run. */
+export function hostsUnavailableMessage(companion: Companion | undefined): string {
+  const list = companion?.runsOn ?? [];
+  const who = companion?.name ?? "This companion";
+  return `${who} is set to run only on: ${list.join(", ")}. None of those hosts is connected and free right now — the ticket will run once one is available (autopilot will keep it queued).`;
 }
 
 // --- Role-spec docs (seeded from the recipe, then user-customisable) --------

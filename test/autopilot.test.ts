@@ -13,7 +13,7 @@ process.env.MYSTERON_AUTOPILOT_IDLE_MS = "300";
 process.env.MYSTERON_AUTOPILOT_BUDGET_MS = "300";
 process.env.MYSTERON_AUTOPILOT_BREATHER_MS = "50";
 
-const { initProject } = await import("../src/core/project.js");
+const { initProject, loadProjectConfig, saveProjectConfig } = await import("../src/core/project.js");
 const { createTicket, listTickets } = await import("../src/core/board.js");
 const { RunManager } = await import("../src/runner/manager.js");
 const { Autopilot } = await import("../src/runner/autopilot.js");
@@ -58,4 +58,34 @@ test("autopilot drains ready tickets one at a time", async () => {
   // No tickets left in "ready"; both were claimed/run.
   assert.equal((await listTickets(projectRoot, { state: "ready" })).length, 0);
   assert.ok((ap.status(config.id)?.completed ?? 0) >= 2);
+});
+
+test("autopilot never runs a guest-pinned companion on the local host", async () => {
+  const root = path.join(tmp, "guest-pinned");
+  await fs.mkdir(root, { recursive: true });
+  const { config } = await initProject(root, { name: "Pinned" });
+
+  // Pin the soloist to a guest that isn't connected, so it can't run locally.
+  config.companions[0].runsOn = ["a-guest-that-is-offline"];
+  await saveProjectConfig(root, config);
+
+  const reloaded = (await loadProjectConfig(root))!;
+  const ticket = await createTicket(root, {
+    title: "Guest-only work",
+    state: "ready",
+    companionId: reloaded.companions[0].id,
+  });
+
+  const ap = new Autopilot(new RunManager(), new WorkerRegistry());
+  ap.start(config.id, root);
+
+  // Let several ticks pass; with no connected guest the ticket can run nowhere.
+  await waitFor(() => ap.status(config.id)?.status === "idle");
+  await new Promise((r) => setTimeout(r, 400));
+
+  ap.stop(config.id);
+  assert.equal(ap.status(config.id)?.completed ?? 0, 0, "nothing ran locally");
+  const still = await listTickets(root, { state: "ready" });
+  assert.equal(still.length, 1, "the ticket stays ready, waiting for its guest");
+  assert.equal(still[0].id, ticket.id);
 });

@@ -65,7 +65,18 @@ export interface Companion {
   role: string;
   /** Seed for the boring-avatars avatar (kept stable even if renamed). */
   avatarSeed: string;
+  /**
+   * Hosts this companion is allowed to run on. Each entry is either the
+   * {@link LOCAL_HOST} sentinel ("local", the machine running the server) or a
+   * connected guest's label. Empty or absent means "all" — run anywhere a free
+   * host is available. When set, a run consults this list and only dispatches to
+   * a listed host; if none is free it errors (or, under autopilot, waits).
+   */
+  runsOn?: string[];
 }
+
+/** Sentinel in {@link Companion.runsOn} for the local (server) machine. */
+export const LOCAL_HOST = "local";
 
 /** @deprecated Pre-roster single-companion shape; migrated to {@link Companion}[]. */
 export interface CompanionConfig {

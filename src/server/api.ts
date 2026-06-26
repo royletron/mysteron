@@ -27,6 +27,12 @@ import {
   readCompanionSpec,
   writeCompanionSpec,
   recentCommits,
+  getCompanion,
+  defaultCompanion,
+  companionAllowsLocal,
+  companionAllowsGuest,
+  companionHasHostPins,
+  hostsUnavailableMessage,
   type ProjectConfig,
   type RegistryEntry,
 } from "../core/index.js";
@@ -380,7 +386,7 @@ export function registerApi(
   app.patch("/api/projects/:id/config", async (req: Request, res: Response) => {
     const r = await resolve(req.params.id);
     if (!r) return notFound(res);
-    const { yolo, recipe, commit, allowedTools, disallowedTools, regenerateCompanionId, pluginOptions, addCompanion, deleteCompanionId } = (req.body ?? {}) as {
+    const { yolo, recipe, commit, allowedTools, disallowedTools, regenerateCompanionId, pluginOptions, addCompanion, deleteCompanionId, setCompanionRunsOn } = (req.body ?? {}) as {
       yolo?: boolean;
       recipe?: string;
       commit?: ProjectConfig["commit"] | null;
@@ -390,6 +396,7 @@ export function registerApi(
       pluginOptions?: ProjectConfig["pluginOptions"];
       addCompanion?: { role: string };
       deleteCompanionId?: string;
+      setCompanionRunsOn?: { id: string; runsOn: string[] };
     };
     const next = { ...r.config, companions: [...r.config.companions] };
     if (typeof yolo === "boolean") next.yolo = yolo;
@@ -433,6 +440,14 @@ export function registerApi(
     // Remove a companion (must keep at least one).
     if (typeof deleteCompanionId === "string" && next.companions.length > 1) {
       next.companions = next.companions.filter((c) => c.id !== deleteCompanionId);
+    }
+    // Pin a companion to specific hosts ("local" + guest labels). Empty clears the
+    // pin (runs anywhere) — store as absent so configs stay tidy.
+    if (setCompanionRunsOn && typeof setCompanionRunsOn.id === "string" && Array.isArray(setCompanionRunsOn.runsOn)) {
+      const runsOn = setCompanionRunsOn.runsOn.map(String).map((h) => h.trim()).filter(Boolean);
+      next.companions = next.companions.map((c) =>
+        c.id === setCompanionRunsOn.id ? { ...c, runsOn: runsOn.length ? runsOn : undefined } : c,
+      );
     }
     await saveProjectConfig(r.entry.path, next);
     await seedCompanionSpecs(r.entry.path, next);
@@ -582,31 +597,39 @@ export function registerApi(
     if (!ticket) return notFound(res);
     const args = { projectId: r.entry.id, projectRoot: r.entry.path, config: r.config, ticket };
     try {
+      // The ticket's companion may be pinned to specific hosts ("runs on"): the
+      // local machine and/or named guests. Consult that list before choosing where
+      // to run, falling back to the existing budget/availability rules.
+      const companion = getCompanion(r.config, ticket.companionId) ?? defaultCompanion(r.config);
+      const allowsLocal = companionAllowsLocal(companion);
+      const idleAllowedGuest = () => workers.idle().find((w) => companionAllowsGuest(companion, w.label));
+
       // A local run can't happen if the host's Claude usage is maxed out (it
       // would just fail against the rate limit) or if no agent program is even
-      // installed. In either case, offload to a connected guest if one is free;
-      // otherwise block with a clear message rather than failing silently.
+      // installed. Together with a "runs on" pin that excludes local, those are
+      // the cases where the work must go to a guest.
       const budget = await checkUsageBudget(r.entry.path, r.config);
       const usageMaxed = !!budget && !budget.safeToContinue;
       const noLocalAgent = !agentAvailable(r.config);
-      // When no local agent: try a guest, then fail with a clear message.
-      if (noLocalAgent) {
-        const worker = workers.idle()[0];
+      const mustUseGuest = !allowsLocal || noLocalAgent || usageMaxed;
+
+      if (mustUseGuest) {
+        const worker = idleAllowedGuest();
         if (worker) {
           const run = await runs.startOnWorker(args, workers, { id: worker.id, label: worker.label });
           if (!run) return res.status(503).json({ error: "The guest worker became unavailable. Try again." });
           return res.json({ run: runSummary(run) });
         }
-        return res.status(503).json({ error: agentUnavailableMessage(r.config) });
-      }
-      // When usage is maxed: prefer a guest if one is free, otherwise fall through
-      // to a local run — the user explicitly chose to run, so let them.
-      if (usageMaxed) {
-        const worker = workers.idle()[0];
-        if (worker) {
-          const run = await runs.startOnWorker(args, workers, { id: worker.id, label: worker.label });
-          if (!run) return res.status(503).json({ error: "The guest worker became unavailable. Try again." });
-          return res.json({ run: runSummary(run) });
+        // No allowed guest free. If local isn't even an option, say why; otherwise
+        // (usage maxed but local allowed) fall through and let the user's explicit
+        // run proceed locally.
+        if (!allowsLocal) {
+          return res.status(503).json({
+            error: companionHasHostPins(companion) ? hostsUnavailableMessage(companion) : "No host is free to run this ticket.",
+          });
+        }
+        if (noLocalAgent) {
+          return res.status(503).json({ error: agentUnavailableMessage(r.config) });
         }
       }
       const run = await runs.start(args);

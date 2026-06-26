@@ -1,5 +1,6 @@
 import { bus, type AutopilotStatus } from "../core/events.js";
 import { blockedTicketIds, listTickets, nextTicketForCompanion } from "../core/board.js";
+import { companionAllowsGuest, companionAllowsLocal, getCompanion } from "../core/companions.js";
 import { loadProjectConfig } from "../core/project.js";
 import { checkUsageBudget } from "./budget.js";
 import type { ProjectConfig } from "../core/types.js";
@@ -126,6 +127,9 @@ export class Autopilot {
           anyWork = true;
           continue;
         }
+        // A companion pinned away from "local" runs on guests only — the guest
+        // fan-out above picks up its tickets; don't start it on this machine.
+        if (!companionAllowsLocal(companion)) continue;
         const ticket = await nextTicketForCompanion(state.projectRoot, companion.id, {
           includeUnassigned: companion.role === "soloist",
         });
@@ -174,17 +178,24 @@ export class Autopilot {
     if (idleWorkers.length === 0) return false;
     const ready = await listTickets(state.projectRoot, { state: "ready" });
     const blocked = await blockedTicketIds(state.projectRoot);
-    const free = ready.filter(
-      (t) =>
-        !blocked.has(t.id) &&
-        (hostMaxed || !t.companionId) &&
-        !this.runs.activeForTicket(state.projectId, t.id),
-    );
+    const companionFor = (t: { companionId?: string }) =>
+      t.companionId ? getCompanion(config, t.companionId) : undefined;
+    const free = ready.filter((t) => {
+      if (blocked.has(t.id) || this.runs.activeForTicket(state.projectId, t.id)) return false;
+      // Unassigned tickets fan out to guests as before. A companion-assigned ticket
+      // goes to a guest when the host is maxed, or when its companion is pinned away
+      // from local (so guests are the only place it can run).
+      if (!t.companionId) return true;
+      return hostMaxed || !companionAllowsLocal(companionFor(t));
+    });
     let dispatched = false;
     for (const worker of idleWorkers) {
       if (this.stopFlags.get(state.projectId)) break;
-      const ticket = free.shift();
-      if (!ticket) break;
+      // Take the first free ticket this guest is allowed to run (respecting the
+      // companion's "runs on" pin); skip the worker if none fit.
+      const idx = free.findIndex((t) => companionAllowsGuest(companionFor(t), worker.label));
+      if (idx < 0) continue;
+      const [ticket] = free.splice(idx, 1);
       try {
         const run = await this.runs.startOnWorker(
           { projectId: state.projectId, projectRoot: state.projectRoot, config, ticket },

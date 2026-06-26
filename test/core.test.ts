@@ -16,6 +16,7 @@ const { loadRegistry } = await import("../src/core/registry.js");
 const { usageInWindow } = await import("../src/plugins/usage-monitor/usage.js");
 const { RECIPES, findRecipe, gitInstruction } = await import("../src/core/recipes.js");
 const { generateCompanion, regenerateCompanion } = await import("../src/core/names.js");
+const { companionAllowsLocal, companionAllowsGuest, companionHasHostPins, hostsUnavailableMessage } = await import("../src/core/companions.js");
 
 const projectRoot = path.join(tmp, "proj");
 
@@ -24,6 +25,30 @@ before(async () => {
 });
 after(async () => {
   await fs.rm(tmp, { recursive: true, force: true });
+});
+
+test("companion 'runs on' pins gate which hosts may run it", () => {
+  const anywhere = { id: "a", name: "Bo", role: "soloist", avatarSeed: "Bo" };
+  // No pin (or empty) → runs anywhere.
+  assert.equal(companionAllowsLocal(anywhere), true);
+  assert.equal(companionAllowsGuest(anywhere, "any-guest"), true);
+  assert.equal(companionHasHostPins(anywhere), false);
+  assert.equal(companionAllowsLocal({ ...anywhere, runsOn: [] }), true);
+
+  // Pinned to local only.
+  const localOnly = { ...anywhere, runsOn: ["local"] };
+  assert.equal(companionAllowsLocal(localOnly), true);
+  assert.equal(companionAllowsGuest(localOnly, "laptop"), false);
+  assert.equal(companionHasHostPins(localOnly), true);
+
+  // Pinned to a named guest only.
+  const guestOnly = { ...anywhere, runsOn: ["laptop"] };
+  assert.equal(companionAllowsLocal(guestOnly), false);
+  assert.equal(companionAllowsGuest(guestOnly, "laptop"), true);
+  assert.equal(companionAllowsGuest(guestOnly, "other"), false);
+
+  // Message names the pinned hosts so the user knows why nothing ran.
+  assert.match(hostsUnavailableMessage(guestOnly), /Bo is set to run only on: laptop/);
 });
 
 test("initProject scaffolds config, docs and registers", async () => {

@@ -50,7 +50,12 @@ export interface Companion {
   name: string;
   role: string;
   avatarSeed: string;
+  /** Hosts this companion may run on ("local" + guest labels); empty/absent = all. */
+  runsOn?: string[];
 }
+
+/** Sentinel host id for the local (server) machine in {@link Companion.runsOn}. */
+export const LOCAL_HOST = "local";
 
 export type CommitMode = "main" | "branch" | "per-ticket";
 

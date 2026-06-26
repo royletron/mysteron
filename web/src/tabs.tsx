@@ -4,6 +4,8 @@ import {
   fmtBytes,
   fmtNum,
   fmtWhen,
+  getWorkers,
+  LOCAL_HOST,
   type BranchInfo,
   type Commit,
   type CommitMode,
@@ -18,7 +20,7 @@ import {
   type UsageBucket,
   type UsageBudget,
 } from "./api";
-import { useAsync } from "./hooks";
+import { useAsync, useGlobalEvents } from "./hooks";
 import { Markdown } from "./Markdown";
 import { CodeEditor } from "./CodeEditor";
 import { Avatar } from "./Avatar";
@@ -623,6 +625,10 @@ export function CompanionTab({ detail }: { detail: ProjectDetail }) {
     2,
   );
   const recipes = useAsync(() => api<{ recipes: Recipe[] }>("/api/recipes"), []);
+  const [workerNonce, setWorkerNonce] = useState(0);
+  useGlobalEvents(() => setWorkerNonce((n) => n + 1));
+  const workers = useAsync(() => getWorkers(), [workerNonce]);
+  const guestHosts = (workers.data?.workers ?? []).map((w) => ({ label: w.label, online: true }));
   const [saving, setSaving] = useState("");
   const [newRole, setNewRole] = useState("");
   const [addingCompanion, setAddingCompanion] = useState(false);
@@ -676,6 +682,7 @@ export function CompanionTab({ detail }: { detail: ProjectDetail }) {
               companion={comp}
               activeRun={(detail.activeRuns ?? []).find((r) => r.companionId === comp.id)}
               canDelete={c.companions.length > 1}
+              guestHosts={guestHosts}
             />
           ))}
         </div>
@@ -982,21 +989,83 @@ export function BranchesTab({ detail }: { detail: ProjectDetail }) {
   );
 }
 
+/** A toggle chip for one host in a companion's "runs on" selector. */
+function HostChip({
+  label,
+  active,
+  dim,
+  offline,
+  disabled,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  dim?: boolean;
+  offline?: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  const cls = active
+    ? "border-violet-500 bg-violet-500/10 text-violet-300"
+    : dim
+      ? "border-zinc-800 text-zinc-600 hover:text-zinc-400"
+      : "border-zinc-700 text-zinc-400 hover:text-zinc-200";
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      title={offline ? `${label} (not connected right now)` : undefined}
+      class={`pill cursor-pointer text-xs disabled:opacity-50 ${cls}`}
+    >
+      {label}
+      {offline ? " ·" : ""}
+    </button>
+  );
+}
+
 function CompanionRow({
   projectId,
   companion,
   activeRun,
   canDelete,
+  guestHosts,
 }: {
   projectId: string;
   companion: Companion;
   activeRun?: RunSummary;
   canDelete: boolean;
+  guestHosts: { label: string; online: boolean }[];
 }) {
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
   const [spec, setSpec] = useState<string | null>(null);
   const [status, setStatus] = useState("");
+
+  const runsOn = companion.runsOn ?? [];
+  const pinned = runsOn.length > 0;
+  // Host options: local + every guest that's connected now or already pinned.
+  const guestLabels = Array.from(
+    new Set([...guestHosts.map((h) => h.label), ...runsOn.filter((h) => h !== LOCAL_HOST)]),
+  );
+  const onlineLabels = new Set(guestHosts.filter((h) => h.online).map((h) => h.label));
+
+  const setRunsOn = async (next: string[]) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await api(`/api/projects/${projectId}/config`, {
+        method: "PATCH",
+        body: JSON.stringify({ setCompanionRunsOn: { id: companion.id, runsOn: next } }),
+      });
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const toggleHost = (host: string) =>
+    setRunsOn(runsOn.includes(host) ? runsOn.filter((h) => h !== host) : [...runsOn, host]);
 
   const regenerate = async () => {
     if (busy) return;
@@ -1082,6 +1151,30 @@ function CompanionRow({
             ✕
           </button>
         )}
+      </div>
+      <div class="mt-2 flex flex-wrap items-center gap-1.5">
+        <span class="text-xs text-zinc-500" title="Which hosts this companion may run on">
+          Runs on
+        </span>
+        <HostChip label="All" active={!pinned} onClick={() => setRunsOn([])} disabled={busy} />
+        <HostChip
+          label="local"
+          active={pinned && runsOn.includes(LOCAL_HOST)}
+          dim={!pinned}
+          onClick={() => toggleHost(LOCAL_HOST)}
+          disabled={busy}
+        />
+        {guestLabels.map((label) => (
+          <HostChip
+            key={label}
+            label={label}
+            active={pinned && runsOn.includes(label)}
+            dim={!pinned}
+            offline={!onlineLabels.has(label)}
+            onClick={() => toggleHost(label)}
+            disabled={busy}
+          />
+        ))}
       </div>
       {editing && (
         <div class="mt-2">
