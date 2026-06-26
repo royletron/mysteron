@@ -25,5 +25,8 @@
     "usage-monitor": {
       "tokenLimit": 20000000
     }
+  },
+  "commit": {
+    "mode": "main"
   }
 }
