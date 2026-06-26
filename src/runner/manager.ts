@@ -1,7 +1,8 @@
-import { type ChildProcess, spawn } from "node:child_process";
+import { type ChildProcess, execFile, spawn } from "node:child_process";
 import { promises as fs, accessSync, constants as FS } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { promisify } from "node:util";
 import { nanoid } from "nanoid";
 import { bus, type RunLine } from "../core/events.js";
 import { updateTicket } from "../core/board.js";
@@ -13,9 +14,11 @@ import {
   captureSnapshotRef,
   isGitRepo,
   landGuestPatch,
+  lockfileChange,
   releaseSnapshotRef,
   removeRunWorktree,
   worktreeRunPatch,
+  type PackageManager,
   type RunWorktree,
 } from "../core/git.js";
 import { defaultCompanion, getCompanion, readCompanionSpec } from "../core/companions.js";
@@ -23,9 +26,21 @@ import type { WorkerRegistry, GuestRunResult } from "../server/workers.js";
 import { ETIQUETTE_DOC, SPEC_DOC, runsDir } from "../core/paths.js";
 import type { Companion, ProjectConfig, Ticket } from "../core/types.js";
 
+const execFileAsync = promisify(execFile);
+
 export type RunStatus = "running" | "done" | "failed" | "stopped";
 
 const MAX_LINES = 5000;
+
+/** Install command per package manager, used to seed an isolated worktree's own
+ *  node_modules when the run's lockfile differs from the host's installed tree.
+ *  Offline-first so the common cached case is fast and works without a network. */
+const INSTALL_ARGS: Record<PackageManager, string[]> = {
+  pnpm: ["install", "--prefer-offline"],
+  npm: ["install", "--no-audit", "--no-fund", "--prefer-offline"],
+  yarn: ["install"],
+  bun: ["install"],
+};
 
 /**
  * Phrases Claude (Code/API) emits when a usage/spend/rate limit is hit. Anchored
@@ -646,7 +661,7 @@ export class RunManager {
       const baseRef = await captureSnapshotRef(projectRoot, run.id);
       const wt = await addRunWorktree(projectRoot, baseRef, run.id);
       this.isolation.set(run.id, wt);
-      await this.linkNodeModules(projectRoot, wt.dir);
+      await this.prepareNodeModules(run, projectRoot, wt.dir);
       this.append(run, "system", "⎇ isolated in a worktree off a snapshot of the project");
       return wt.dir;
     } catch (e) {
@@ -658,11 +673,21 @@ export class RunManager {
   }
 
   /**
-   * Symlink the host's node_modules into an isolated worktree so builds/tests run
-   * without a fresh install (the snapshot excludes node_modules — it's gitignored).
-   * Best-effort: a ticket that changes dependencies can still `npm install` itself.
+   * Give an isolated worktree its dependencies (the snapshot excludes node_modules
+   * — it's gitignored). The cheap default symlinks the host's tree: near-instant
+   * and shares the build cache. But when the run's snapshot carries a changed
+   * lockfile, the host's installed tree is stale *and* a shared symlink would leak
+   * the run's own install back into it — so we install into the worktree's own
+   * node_modules instead. Best-effort throughout: any failure just leaves the run
+   * to install for itself.
    */
-  private async linkNodeModules(projectRoot: string, workdir: string): Promise<void> {
+  private async prepareNodeModules(run: Run, projectRoot: string, workdir: string): Promise<void> {
+    const changed = await lockfileChange(projectRoot).catch(() => null);
+    if (changed) {
+      this.append(run, "system", `⇣ ${changed.file} changed — installing deps in the isolated tree (${changed.manager})`);
+      if (await this.installNodeModules(workdir, changed.manager)) return;
+      this.append(run, "system", "⚠ isolated install failed; linking the host's node_modules instead");
+    }
     const src = path.join(projectRoot, "node_modules");
     try {
       await fs.access(src);
@@ -670,6 +695,22 @@ export class RunManager {
       return; // host has no installed deps to share
     }
     await fs.symlink(src, path.join(workdir, "node_modules"), "dir").catch(() => undefined);
+  }
+
+  /** Run a package manager's install in an isolated worktree. Returns whether it
+   *  succeeded; never throws (a failed install falls back to the host symlink). */
+  private async installNodeModules(workdir: string, manager: PackageManager): Promise<boolean> {
+    try {
+      await execFileAsync(manager, INSTALL_ARGS[manager], {
+        cwd: workdir,
+        env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+        timeout: 5 * 60_000,
+        maxBuffer: 64 << 20,
+      });
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   /**

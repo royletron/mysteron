@@ -134,6 +134,39 @@ export async function worktreeRunPatch(
   return { patch, commitMessage };
 }
 
+/** Package managers we know how to install for in an isolated worktree. */
+export type PackageManager = "pnpm" | "npm" | "yarn" | "bun";
+
+/** Lockfile → package manager, in detection order (most specific first). */
+const LOCKFILES: { file: string; manager: PackageManager }[] = [
+  { file: "pnpm-lock.yaml", manager: "pnpm" },
+  { file: "npm-shrinkwrap.json", manager: "npm" },
+  { file: "package-lock.json", manager: "npm" },
+  { file: "yarn.lock", manager: "yarn" },
+  { file: "bun.lockb", manager: "bun" },
+];
+
+/**
+ * Whether the host's *working tree* carries an uncommitted change to a lockfile
+ * (modified, staged or brand-new). A run's snapshot includes such a change, so
+ * the worktree starts from a lockfile the host's node_modules wasn't installed
+ * from — meaning a symlink to that node_modules would be stale. Returns the
+ * changed lockfile and its package manager, or null when no lockfile moved.
+ */
+export async function lockfileChange(
+  root: string,
+): Promise<{ file: string; manager: PackageManager } | null> {
+  const files = LOCKFILES.map((l) => l.file);
+  let porcelain: string;
+  try {
+    porcelain = (await exec("git", ["-C", root, "status", "--porcelain", "--untracked-files=all", "--", ...files])).stdout;
+  } catch {
+    return null;
+  }
+  const changed = new Set(statusEntries(porcelain).map((e) => e.path));
+  return LOCKFILES.find((l) => changed.has(l.file)) ?? null;
+}
+
 export interface LandResult {
   ok: boolean;
   /** How the work landed: into the checked-out branch's working tree, on a (dedicated or named) branch, or not at all. */
