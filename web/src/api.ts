@@ -272,6 +272,46 @@ export interface Recipe {
   roles: { role: string; description: string }[];
 }
 
+// ---- Costs (cross-project spend explorer) -------------------------------
+export interface DailyCost {
+  date: string;
+  totalUsd: number;
+  runs: number;
+}
+
+export interface ProjectCost {
+  projectId: string;
+  name: string;
+  totalUsd: number;
+  runs: number;
+  tickets: number;
+  avgTicketUsd: number;
+  avgRunUsd: number;
+  daily: DailyCost[];
+}
+
+export interface TicketCost {
+  projectId: string;
+  projectName: string;
+  ticketId: string;
+  ticketTitle: string;
+  totalUsd: number;
+  runs: number;
+}
+
+export interface CostStats {
+  totalUsd: number;
+  runs: number;
+  tickets: number;
+  avgTicketUsd: number;
+  avgRunUsd: number;
+  byProject: ProjectCost[];
+  daily: DailyCost[];
+  topTickets: TicketCost[];
+}
+
+export const getCosts = () => api<CostStats>("/api/costs");
+
 export async function api<T>(path: string, opts?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     headers: { "Content-Type": "application/json" },
@@ -390,6 +430,14 @@ export function fmtBytes(n: number): string {
 export function fmtCost(n: number | undefined): string {
   if (typeof n !== "number") return "";
   return n >= 0.01 ? `$${n.toFixed(2)}` : `$${n.toFixed(4)}`;
+}
+
+/** A dollar total with thousands separators, e.g. "$1,234.56". Keeps cents-scale
+ *  totals readable too (sub-cent shows 4dp). */
+export function fmtUsd(n: number | undefined): string {
+  const v = n ?? 0;
+  const dp = v !== 0 && Math.abs(v) < 0.01 ? 4 : 2;
+  return `$${new Intl.NumberFormat(undefined, { minimumFractionDigits: dp, maximumFractionDigits: dp }).format(v)}`;
 }
 
 /** "14:32:10" for timestamps from today, otherwise "23 Jun, 14:32". */

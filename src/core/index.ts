@@ -1,6 +1,7 @@
 export * from "./types.js";
 export * from "./paths.js";
 export * from "./registry.js";
+export * from "./costs.js";
 export * from "./project.js";
 export * from "./companions.js";
 export * from "./git.js";

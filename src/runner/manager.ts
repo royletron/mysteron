@@ -6,6 +6,7 @@ import { promisify } from "node:util";
 import { nanoid } from "nanoid";
 import { bus, type RunLine } from "../core/events.js";
 import { updateTicket } from "../core/board.js";
+import { recordRunCost } from "../core/costs.js";
 import { readDoc } from "../core/docs.js";
 import { findRecipe, gitInstruction, resolveProjectGit } from "../core/recipes.js";
 import { loadProjectConfig } from "../core/project.js";
@@ -1111,6 +1112,8 @@ export class RunManager {
     }
 
     void this.persist(run); // final record with the complete output
+    // Push the run's spend to the cross-project cost ledger (no-op if it reported none).
+    void recordRunCost(run);
     const waiters = this.waiters.get(run.id);
     if (waiters) {
       this.waiters.delete(run.id);

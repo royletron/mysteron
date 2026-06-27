@@ -5,6 +5,7 @@ import { Home } from "./Home";
 import { Project } from "./Project";
 import { TicketPage } from "./TicketPage";
 import { Settings } from "./Settings";
+import { Costs } from "./Costs";
 import { Login } from "./Login";
 import { Loading } from "./ui";
 import { LiveDot } from "./ui";
@@ -124,6 +125,28 @@ function AppShell() {
         )}
 
         <a
+          href="#/costs"
+          class={`transition hover:text-violet-300 ${route.name === "costs" ? "text-violet-300" : "text-zinc-500"}`}
+          title="Cost explorer"
+          aria-label="Cost explorer"
+        >
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <line x1="12" y1="2" x2="12" y2="22" />
+            <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+          </svg>
+        </a>
+
+        <a
           href="#/settings"
           class="text-zinc-500 transition hover:rotate-45 hover:text-violet-300"
           title="Settings"
@@ -172,6 +195,7 @@ function AppShell() {
           />
         )}
         {route.name === "settings" && <Settings />}
+        {route.name === "costs" && <Costs />}
       </main>
 
       <Footer />
