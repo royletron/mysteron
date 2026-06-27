@@ -1,13 +1,15 @@
 ---
 title: 'Recipe teams: delegate to real sub-agents'
-state: backlog
+state: review
 priority: medium
+assignee: Waldorf the Compiler
 labels:
   - feature
   - spec-gap
   - v2
 created: '2026-06-25T19:06:01.208Z'
-updated: '2026-06-27T11:07:49.940Z'
+updated: '2026-06-27T13:14:20.088Z'
+order: 3
 ---
 
 **Spec promise, partially delivered.** SPEC: a companion can *"offload it to a number of sub-agents (we can provide recipes for agent teams, designer, backend dev, frontend dev etc)."*

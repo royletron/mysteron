@@ -1,13 +1,15 @@
 ---
 title: 'Atomic, serialized writes for board/docs/memory'
-state: backlog
+state: review
 priority: high
+assignee: Waldorf the Compiler
 labels:
   - tech-debt
   - reliability
   - v2
 created: '2026-06-25T19:06:01.084Z'
-updated: '2026-06-27T11:07:49.460Z'
+updated: '2026-06-27T13:11:31.978Z'
+order: 2
 ---
 
 **Problem.** Every write to the shared `.mysteron/` state is a bare read-modify-write `fs.writeFile` with no locking and no temp+rename:

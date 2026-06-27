@@ -1,23 +1,22 @@
 ---
 name: runner/dispatch
-description: How the autopilot dispatches tickets to runs — there is no real queue, dedup is by scan, and local vs guest are split paths
+description: How the autopilot dispatches tickets — one DispatchQueue + planner + Executor path (no more per-tick run scan)
 metadata:
   type: project
 ---
 
-There is **no queue data structure**. The board's `ready` column *is* the queue, re-derived from disk on every poll tick.
+Dispatch now goes through **one layer** in `src/runner/dispatch.ts` that separates *deciding what runs* from *how it runs* (ticket `nCDlPpY-`). The board's `ready` column is still the source of truth, but it is reconciled into an explicit, observable queue each tick rather than re-derived ad hoc.
 
-`Autopilot.loop()` (`src/runner/autopilot.ts`) wakes every `BREATHER_MS` (~1.5s, busy) or `IDLE_POLL_MS` (~15s, idle). Each tick:
-1. `checkUsageBudget()` — if the host is maxed, pause local runs and let guests absorb work.
-2. `fanOutToGuests()` — recompute the free ready-ticket set (`!blocked && !activeForTicket`, respecting companion local/guest pins) and hand one each to idle guests via `runs.startOnWorker()`.
-3. Per companion: if free (`!activeForCompanion`) and allowed local, `nextTicketForCompanion()` → `runs.start()`.
+**`DispatchQueue`** holds the waiting/claimed work-items for one project:
+- `sync(readyUnblockedTickets)` rebuilds the waiting list each tick in board (priority) order, preserving `attempts`/`enqueuedAt`/`nextEligibleAt` for carried-over items and leaving in-flight (claimed) items running. Deterministic ordering — no "whoever the tick picked first".
+- `claim(ticketId, companionId)` moves an item in flight and marks the companion busy (ref-counted, so two guest runs of the soloist's work both count); `release` (work landed) and `requeue(id, delayMs)` (failed/needs retry — bumps `attempts`, sets a backoff) free it.
+- `has` / `isCompanionBusy` are **O(1)** — dedup is no longer an O(runs) scan per tick. `depth()`/`inFlight()`/`maxWaitMs()` are first-class (surfaced on `AutopilotState.queue`).
+- `eligible()` returns the waiting items past their `nextEligibleAt` (retry backoff); the autopilot plans against this, not the raw `queued()`.
 
-**Two split dispatch paths for one concept** ("run this ticket on an executor"): local `runs.start()` vs guest `runs.startOnWorker()`, with selection logic duplicated/interleaved across both. Landing is already unified through `landGuestPatch()`; dispatch is not.
+**`planAssignments(...)`** is the single, pure place the selection logic lives (blocked? already active? companion pinned local/guest? host maxed?). Guests are assigned first (one ticket each, respecting `runsOn` pins via `companionAllowsGuest`), then free local companions take their own work (one task at a time; a companion already busy — incl. by a guest run — is skipped locally). When `hostMaxed`, only guest assignments are produced.
 
-**Dedup is by O(runs) scan**: `activeForTicket` / `activeForCompanion` / `busyCompanionIds` in `manager.ts` each iterate all runs; the autopilot calls them per companion per tick. Correct (per-companion lock + per-ticket idempotency genuinely hold), just not O(1).
+**`Executor`** (`LocalExecutor` wrapping `runs.start`, `GuestExecutor` wrapping `runs.startOnWorker`, built by `executorFor`) gives both runners one `start(ticket)` signature, so `Autopilot.dispatch()` fires either uniformly and wires the run's completion back to the queue (landed → release, else → the retry policy in `handleFailure`). Mirrors how landing was already unified through `landGuestPatch()`.
 
-**Reliability gaps in this design:**
-- No retry policy — a failed ticket goes back to `ready` and is re-dispatched next tick forever (no attempt cap, no backoff, no dead-letter). Poison ticket = infinite budget burn in yolo.
-- Autopilot state is in-memory (`states`/`stopFlags` Maps); `hydrate()` recovers run history but the loop is not auto-resumed on restart.
+`RunManager.activeForTicket`/`activeForCompanion`/`busyCompanionIds` still exist as idempotency backstops (and for the API status endpoint), but the autopilot no longer calls them per companion per tick.
 
-Tracked as `v2` tickets: `nCDlPpY-` (unify dispatch behind one queue + Executor), `qY17AAjx` (retry policy), `AsPmwens` (persist/auto-resume autopilot). Pairs with `__J9CotP` (atomic board writes). See `docs/V2-REVIEW.md`. Related: [[runner/session-continuity]], [[core/git]].
+**Reliability:** the retry cap/backoff/dead-letter gap is now closed (`qY17AAjx`) — see [[runner/retry]]. Still open: autopilot loop+queue are in-memory, not auto-resumed on restart (so `attempts` reset on restart) — `AsPmwens`; shared board writes still race — `__J9CotP`. See `docs/V2-REVIEW.md`. Related: [[runner/limit-detection]], [[runner/session-continuity]], [[core/git]].

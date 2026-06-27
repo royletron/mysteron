@@ -1,13 +1,15 @@
 ---
 title: Extensible plugin loading (beyond the hardcoded registry)
-state: backlog
+state: review
 priority: low
+assignee: Waldorf the Compiler
 labels:
   - tech-debt
   - feature
   - v2
 created: '2026-06-25T19:06:01.347Z'
-updated: '2026-06-27T11:07:50.611Z'
+updated: '2026-06-27T13:18:11.470Z'
+order: 4
 ---
 
 **Spec wants "a plugins system."** The interface (`src/plugins/types.ts`) is clean, but `src/plugins/manager.ts` has a hardcoded `REGISTRY` containing only `usageMonitorPlugin`. Adding a plugin means editing source — there's no config-driven or third-party discovery.

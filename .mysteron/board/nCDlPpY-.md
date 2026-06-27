@@ -1,14 +1,16 @@
 ---
 title: 'v2: Unify dispatch behind one queue/scheduler abstraction'
-state: backlog
+state: done
 priority: medium
 createdBy: c1bf55fe-3e93-410d-94a7-cfde4dc1f80e
+assignee: Waldorf the Compiler
 labels:
   - v2
   - tech-debt
   - needs-decision
 created: '2026-06-27T11:07:19.921Z'
-updated: '2026-06-27T11:07:19.921Z'
+updated: '2026-06-27T12:06:20.786Z'
+order: 1
 ---
 
 **Architecture rethink (raised by review `aX6J81M_`).** There is no real queue today — the "queue" is the board's `ready` column re-derived on every poll tick.

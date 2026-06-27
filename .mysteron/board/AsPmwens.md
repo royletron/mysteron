@@ -1,13 +1,15 @@
 ---
 title: 'v2: Persist and auto-resume autopilot across server restarts'
-state: backlog
+state: review
 priority: medium
 createdBy: c1bf55fe-3e93-410d-94a7-cfde4dc1f80e
+assignee: Waldorf the Compiler
 labels:
   - v2
   - reliability
 created: '2026-06-27T11:07:44.989Z'
-updated: '2026-06-27T11:07:44.989Z'
+updated: '2026-06-27T13:03:35.180Z'
+order: 1
 ---
 
 **Reliability gap (raised by review `aX6J81M_`).** Autopilot state is in-memory only and does not survive a restart — which undercuts the "set up a board and leave it running across days" goal, since a server bounce (crash, deploy, OS reboot, `tsx watch` restart) silently stops the churn.
