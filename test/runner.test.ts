@@ -135,6 +135,81 @@ test("a local run is isolated in a worktree and its changes land on the current 
   }
 });
 
+test("an isolated run with an unchanged lockfile symlinks the host's node_modules", async () => {
+  const proj = path.join(tmp, "nm-link");
+  const { config } = await initProject(proj, { name: "NmLink" });
+  await exec("git", ["-C", proj, "init", "-q"]);
+  await exec("git", ["-C", proj, "config", "user.name", "Test"]);
+  await exec("git", ["-C", proj, "config", "user.email", "test@local"]);
+  await fs.writeFile(path.join(proj, ".gitignore"), "node_modules\n");
+  await fs.writeFile(path.join(proj, "package.json"), '{"name":"nm-link","version":"1.0.0"}\n');
+  await fs.writeFile(path.join(proj, "package-lock.json"), '{"lockfileVersion":3}\n');
+  await exec("git", ["-C", proj, "add", "-A"]);
+  await exec("git", ["-C", proj, "commit", "-q", "-m", "base"]);
+  // Host has an installed tree the worktree can share.
+  await fs.mkdir(path.join(proj, "node_modules"), { recursive: true });
+  await fs.writeFile(path.join(proj, "node_modules", ".host-marker"), "host\n");
+
+  const ticket = await createTicket(proj, { title: "Touch deps", state: "ready" });
+  const saved = process.env.MYSTERON_AGENT_CMD;
+  // The agent records whether its cwd's node_modules is a symlink (the host's).
+  process.env.MYSTERON_AGENT_CMD = 'if [ -L node_modules ]; then echo LINKED > nm-kind.txt; else echo OWN > nm-kind.txt; fi';
+  try {
+    const rm = new RunManager();
+    const run = await rm.start({ projectId: config.id, projectRoot: proj, config, ticket });
+    await waitFor(() => rm.get(run.id)?.status !== "running", 15000);
+    assert.equal(rm.get(run.id)?.status, "done");
+    assert.equal((await fs.readFile(path.join(proj, "nm-kind.txt"), "utf8")).trim(), "LINKED");
+  } finally {
+    if (saved !== undefined) process.env.MYSTERON_AGENT_CMD = saved;
+    else delete process.env.MYSTERON_AGENT_CMD;
+  }
+});
+
+test("an isolated run with a changed lockfile installs into its own node_modules", async () => {
+  const proj = path.join(tmp, "nm-install");
+  const { config } = await initProject(proj, { name: "NmInstall" });
+  await exec("git", ["-C", proj, "init", "-q"]);
+  await exec("git", ["-C", proj, "config", "user.name", "Test"]);
+  await exec("git", ["-C", proj, "config", "user.email", "test@local"]);
+  await fs.writeFile(path.join(proj, ".gitignore"), "node_modules\n");
+  await fs.writeFile(path.join(proj, "package.json"), '{"name":"nm-install","version":"1.0.0"}\n');
+  await fs.writeFile(path.join(proj, "package-lock.json"), '{"lockfileVersion":3}\n');
+  await exec("git", ["-C", proj, "add", "-A"]);
+  await exec("git", ["-C", proj, "commit", "-q", "-m", "base"]);
+  // Host has an installed tree, but the snapshot's lockfile has moved on — a
+  // symlink would be stale, so the run must install into its own node_modules.
+  await fs.mkdir(path.join(proj, "node_modules"), { recursive: true });
+  await fs.writeFile(path.join(proj, "node_modules", ".host-marker"), "host\n");
+  await fs.writeFile(path.join(proj, "package-lock.json"), '{"lockfileVersion":3,"bumped":true}\n');
+
+  // Stub the package manager so the install is hermetic (no registry, no network):
+  // a fake `npm` on PATH just materialises a real node_modules in its cwd.
+  const fakeBin = path.join(proj, ".fakebin");
+  await fs.mkdir(fakeBin, { recursive: true });
+  await fs.writeFile(path.join(fakeBin, "npm"), "#!/bin/sh\nmkdir -p node_modules\necho fake > node_modules/.installed\n", { mode: 0o755 });
+  const savedPath = process.env.PATH;
+  process.env.PATH = `${fakeBin}${path.delimiter}${savedPath ?? ""}`;
+
+  const ticket = await createTicket(proj, { title: "Bump deps", state: "ready" });
+  const saved = process.env.MYSTERON_AGENT_CMD;
+  process.env.MYSTERON_AGENT_CMD = "true";
+  try {
+    const rm = new RunManager();
+    const run = await rm.start({ projectId: config.id, projectRoot: proj, config, ticket });
+    await waitFor(() => rm.get(run.id)?.status !== "running", 15000);
+    assert.equal(rm.get(run.id)?.status, "done");
+    const sys = rm.get(run.id)!.lines.filter((l) => l.stream === "system").map((l) => l.text);
+    // It chose the install path up front (not the symlink) and the install stuck.
+    assert.ok(sys.some((t) => t.includes("installing deps in the isolated tree (npm)")), "install branch was taken");
+    assert.ok(!sys.some((t) => t.includes("isolated install failed")), "install did not fall back to the host symlink");
+  } finally {
+    process.env.PATH = savedPath;
+    if (saved !== undefined) process.env.MYSTERON_AGENT_CMD = saved;
+    else delete process.env.MYSTERON_AGENT_CMD;
+  }
+});
+
 test("a run that finished is left in place even if its output mentioned a limit", async () => {
   // Ticket q18zz3xH: a finished ticket was bouncing back to Ready (and printing a
   // second 'limit reached' summary) because limit detection tripped on the agent's
