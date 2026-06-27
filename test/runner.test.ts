@@ -238,6 +238,9 @@ test("resolveCommand maps yolo + allowed/disallowed tools to claude flags", () =
     const next = resolveCommand({ ...base, yolo: false } as any, "/tmp/proj", "PROMPT", comp as any, true);
     assert.ok(next.args.includes("--resume") && next.args.includes(comp.id));
     assert.ok(!next.args.includes("--session-id"));
+    // After a session error, no session flags at all (fresh start, no continuity).
+    const noSess = resolveCommand({ ...base, yolo: false } as any, "/tmp/proj", "PROMPT", comp as any, false, true);
+    assert.ok(!noSess.args.includes("--session-id") && !noSess.args.includes("--resume") && !noSess.args.includes(comp.id));
   } finally {
     if (saved !== undefined) process.env.MYSTERON_AGENT_CMD = saved;
   }
@@ -448,6 +451,52 @@ test("guestLandMessage falls back to the ticket title when the agent committed n
     const { message, trailer } = guestLandMessage(empty, "Cloud Companions", "Waldorf the Compiler");
     assert.equal(message, "Cloud Companions");
     assert.equal(trailer, "Mysteron-Companion: Waldorf the Compiler");
+  }
+});
+
+test("session error triggers a fresh retry without session flags", async () => {
+  const saved = process.env.MYSTERON_AGENT_CMD;
+  const proj = path.join(tmp, "session-err");
+  const { config } = await initProject(proj, { name: "SessionErr" });
+  const ticket = await createTicket(proj, { title: "Session retry", state: "ready" });
+
+  // First invocation: emit a session-error phrase then exit non-zero.
+  // Second invocation (retry): succeed normally.
+  let attempt = 0;
+  process.env.MYSTERON_AGENT_CMD = `
+    if [ "$attempt_${process.pid}" = "" ]; then
+      export attempt_${process.pid}=done
+      echo "invalid session id" 1>&2
+      exit 1
+    fi
+    echo "ok second time"
+  `;
+  // Simpler: use a counter file.
+  const counter = path.join(proj, ".attempt");
+  process.env.MYSTERON_AGENT_CMD =
+    `if [ ! -f "${counter}" ]; then touch "${counter}"; echo "invalid session id" 1>&2; exit 1; fi; echo "ok second time"`;
+
+  try {
+    const rm = new RunManager();
+    const run = await rm.start({ projectId: config.id, projectRoot: proj, config, ticket });
+
+    // Wait for both the failed run and the retried run to settle.
+    await waitFor(() => rm.get(run.id)?.status !== "running", 10000);
+    assert.equal(rm.get(run.id)?.status, "failed");
+    assert.ok(rm.get(run.id)?.lines.some((l) => l.text.includes("dropping session")));
+
+    // The retry creates a second run for the same ticket — wait for it.
+    await waitFor(
+      () => rm.listByProject(config.id).some((r) => r.id !== run.id && r.ticketId === ticket.id && r.status !== "running"),
+      10000,
+    );
+    const retry = rm.listByProject(config.id).find((r) => r.id !== run.id && r.ticketId === ticket.id);
+    assert.ok(retry, "a retry run was created");
+    assert.equal(retry?.status, "done");
+    assert.ok(retry?.lines.some((l) => l.text.includes("ok second time")));
+  } finally {
+    if (saved !== undefined) process.env.MYSTERON_AGENT_CMD = saved;
+    else delete process.env.MYSTERON_AGENT_CMD;
   }
 });
 

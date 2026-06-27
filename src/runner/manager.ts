@@ -50,6 +50,16 @@ const INSTALL_ARGS: Record<PackageManager, string[]> = {
 const LIMIT_HIT_RE =
   /(?:you'?ve\s+)?hit your (?:usage|spend|rate) limit|(?:usage|spend|rate) limit reached|reached your (?:usage|spend|rate) limit|credit balance is too low/i;
 
+/**
+ * Phrases Claude Code emits when the session id is invalid for this account —
+ * either the session was created on another machine (same account) and we tried
+ * --session-id when we should have used --resume, or it was created on a
+ * different account entirely. Detected so we can drop all session flags and
+ * restart fresh rather than looping on an unrecoverable error.
+ */
+const SESSION_ERROR_RE =
+  /invalid session id|session.*?not found|does not belong.*?account|session.*?already exists/i;
+
 export interface Run {
   id: string;
   projectId: string;
@@ -77,6 +87,8 @@ export interface Run {
   logAvailable: boolean;
   /** Set when the agent reported hitting a usage/spend/rate limit (see LIMIT_HIT_RE). */
   limitHit?: boolean;
+  /** Set when Claude rejected the session id (wrong account / already exists elsewhere). */
+  sessionError?: boolean;
   /** For guest runs: the branch the returned patch was committed to (only when it landed on a dedicated branch, not the current one). */
   branch?: string;
   /** For guest runs: the working-tree snapshot the guest diffed against (pinned so `git apply --3way` can merge the result). */
@@ -131,6 +143,7 @@ export function resolveCommand(
   prompt: string,
   companion?: Companion,
   resumeSession = false,
+  noSession = false,
 ): {
   cmd: string;
   args: string[];
@@ -184,7 +197,7 @@ export function resolveCommand(
   // later runs must `--resume` it, or Claude errors "session already in use".
   // The per-companion lock guarantees no concurrent use of the same session.
   // MYSTERON_AGENT_SESSION=0 opts out (fresh context each run).
-  const useSession = companion && process.env.MYSTERON_AGENT_SESSION !== "0";
+  const useSession = !noSession && companion && process.env.MYSTERON_AGENT_SESSION !== "0";
   const sessionFlag = resumeSession ? "--resume" : "--session-id";
   if (useSession) args.push(sessionFlag, companion.id);
 
@@ -554,7 +567,7 @@ export class RunManager {
       .map((r) => r.companionId as string);
   }
 
-  async start(args: StartArgs): Promise<Run> {
+  async start(args: StartArgs, /** @internal */ _noSession = false): Promise<Run> {
     const active = this.activeForTicket(args.projectId, args.ticket.id);
     if (active) return active;
 
@@ -571,7 +584,8 @@ export class RunManager {
     const companionSpec = companion ? await readCompanionSpec(args.projectRoot, companion.id) : undefined;
     // If this companion has already run on this machine its Claude session
     // exists — resume it rather than trying to recreate the same session id.
-    const resumeSession = companion ? this.companionHasLocalSession(companion.id) : false;
+    // _noSession skips all session flags (retry path after a session error).
+    const resumeSession = !_noSession && companion ? this.companionHasLocalSession(companion.id) : false;
     const prompt = buildPrompt(args.config, args.ticket, spec, etiquette, companion, companionSpec ?? undefined, resumeSession);
     const { cmd, args: cmdArgs, shell, display, format } = resolveCommand(
       args.config,
@@ -579,6 +593,7 @@ export class RunManager {
       prompt,
       companion,
       resumeSession,
+      _noSession,
     );
 
     const run: Run = {
@@ -660,6 +675,20 @@ export class RunManager {
     child.on("close", (code) => {
       if (run.status !== "running") return; // already stopped
       this.append(run, "system", `■ agent exited with code ${code}`);
+
+      // The session id was rejected by Claude (wrong account or already exists
+      // on another machine). Drop all session flags and restart fresh — once.
+      if (run.sessionError && !_noSession) {
+        this.append(
+          run,
+          "system",
+          "⚠ Claude session belongs to a different account or machine — dropping session and restarting fresh",
+        );
+        this.finish(run, "failed", code);
+        void this.start(args, true);
+        return;
+      }
+
       if (this.isolation.has(run.id)) {
         void this.landLocalRun(run, code);
       } else {
@@ -1001,6 +1030,7 @@ export class RunManager {
 
   private append(run: Run, stream: RunLine["stream"], text: string): void {
     if (!run.limitHit && LIMIT_HIT_RE.test(text)) run.limitHit = true;
+    if (!run.sessionError && SESSION_ERROR_RE.test(text)) run.sessionError = true;
     const line: RunLine = { stream, text, at: new Date().toISOString() };
     run.lines.push(line);
     if (run.lines.length > MAX_LINES) run.lines.splice(0, run.lines.length - MAX_LINES);
