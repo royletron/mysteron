@@ -19,7 +19,7 @@ import {
 import { RECIPES, findRecipe } from "../core/recipes.js";
 import { ETIQUETTE_DOC, SPEC_DOC } from "../core/paths.js";
 import { loadProjectConfig } from "../core/project.js";
-import { enabledPlugins } from "../plugins/manager.js";
+import { resolvePlugins } from "../plugins/manager.js";
 import type { ProjectConfig } from "../core/types.js";
 
 function json(data: unknown) {
@@ -252,7 +252,7 @@ export async function buildMcpServer(
 
   // --- Plugin-contributed tools --------------------------------------------
   const ctx = { projectRoot, config };
-  for (const plugin of enabledPlugins(config.plugins)) {
+  for (const plugin of await resolvePlugins(projectRoot, config.plugins)) {
     for (const tool of plugin.tools?.(ctx) ?? []) {
       server.registerTool(
         tool.name,

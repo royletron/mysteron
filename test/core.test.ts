@@ -10,6 +10,7 @@ process.env.MYSTERON_HOME = path.join(tmp, "home");
 process.env.CLAUDE_PROJECTS_DIR = path.join(tmp, "claude");
 
 const { initProject, loadProjectConfig } = await import("../src/core/project.js");
+const { resolvePlugins } = await import("../src/plugins/manager.js");
 const { createTicket, listTickets, nextTicket, nextTicketForCompanion, updateTicket, getTicket, deleteTicket, addAttachment, removeAttachment, readAttachment, binStaleDone, moveTicketsByState, reorderTickets, listTicketsEnriched, blockedTicketIds } = await import("../src/core/board.js");
 const { readDoc, writeDoc } = await import("../src/core/docs.js");
 const { loadRegistry } = await import("../src/core/registry.js");
@@ -366,4 +367,41 @@ test("usage parser sums tokens within the window", async () => {
   assert.equal(w.outputTokens, 50);
   assert.equal(w.billableTokens, 160, "input+output+cacheCreation, excluding the out-of-window entry");
   assert.equal(w.messages, 1);
+});
+
+test("resolvePlugins: built-in IDs resolve from registry; path entries load from disk", async () => {
+  const root = path.join(tmp, "plugin-load");
+  await fs.mkdir(root, { recursive: true });
+
+  // Built-in id resolves as before.
+  const builtins = await resolvePlugins(root, ["usage-monitor"]);
+  assert.equal(builtins.length, 1);
+  assert.equal(builtins[0].id, "usage-monitor");
+
+  // A path entry pointing to a real .mjs file is loaded dynamically.
+  const pluginPath = path.join(root, "custom.mjs");
+  await fs.writeFile(
+    pluginPath,
+    `export default {
+  id: "custom-ping",
+  name: "Custom Ping",
+  description: "Test plugin loaded from disk.",
+  tools() {
+    return [{ name: "ping", description: "pong", inputSchema: {}, async handler() { return { pong: true }; } }];
+  }
+};
+`,
+  );
+  const custom = await resolvePlugins(root, [pluginPath]);
+  assert.equal(custom.length, 1);
+  assert.equal(custom[0].id, "custom-ping");
+  assert.equal(custom[0].tools?.({ projectRoot: root, config: {} as never })[0].name, "ping");
+
+  // Mixed: built-in + custom both resolve.
+  const mixed = await resolvePlugins(root, ["usage-monitor", pluginPath]);
+  assert.equal(mixed.length, 2);
+
+  // An unresolvable entry is silently skipped — no crash.
+  const partial = await resolvePlugins(root, ["usage-monitor", "/nonexistent/plugin.mjs"]);
+  assert.equal(partial.length, 1);
 });
