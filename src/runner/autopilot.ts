@@ -259,7 +259,13 @@ export class Autopilot {
       this.set(state, state.status, state.message);
       return;
     }
-    const reason = run.limitHit ? "usage limit" : run.landFailed ? "patch did not apply" : "agent failed";
+    const reason = run.limitHit
+      ? "usage limit"
+      : run.streamStalled
+        ? "stream stalled"
+        : run.landFailed
+          ? "patch did not apply"
+          : "agent failed";
     void this.handleFailure(state, queue, item, who, classifyFailure(run), reason);
   }
 

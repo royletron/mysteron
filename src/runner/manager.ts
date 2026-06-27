@@ -61,6 +61,14 @@ const LIMIT_HIT_RE =
 const SESSION_ERROR_RE =
   /invalid session id|session.*?not found|does not belong.*?account|session.*?already exists/i;
 
+/**
+ * Phrases Claude Code emits when the streaming API connection drops mid-response
+ * (the model's reply is cut off before it finishes). This is transient — the next
+ * attempt usually succeeds — so we flag it and let the autopilot retry rather than
+ * dead-letter a ticket the agent never got to finish.
+ */
+const STREAM_STALL_RE = /response stalled mid-?stream|response.*?may be incomplete/i;
+
 export interface Run {
   id: string;
   projectId: string;
@@ -90,6 +98,8 @@ export interface Run {
   limitHit?: boolean;
   /** Set when Claude rejected the session id (wrong account / already exists elsewhere). */
   sessionError?: boolean;
+  /** Set when Claude's streaming response stalled mid-flight (transient, retryable). */
+  streamStalled?: boolean;
   /** Set when the agent's work couldn't be landed (patch wouldn't apply) — a transient,
    *  retryable failure even though the agent itself exited cleanly. */
   landFailed?: boolean;
@@ -1057,6 +1067,7 @@ export class RunManager {
     if (stream !== "system") {
       if (!run.limitHit && LIMIT_HIT_RE.test(text)) run.limitHit = true;
       if (!run.sessionError && SESSION_ERROR_RE.test(text)) run.sessionError = true;
+      if (!run.streamStalled && STREAM_STALL_RE.test(text)) run.streamStalled = true;
     }
     const line: RunLine = { stream, text, at: new Date().toISOString() };
     run.lines.push(line);
@@ -1116,6 +1127,17 @@ export class RunManager {
         run,
         "system",
         "⚠ Claude usage/spend limit reached — moving the ticket back to Ready to retry after reset.",
+      );
+      void updateTicket(run.projectRoot, run.ticketId, { state: "ready" })
+        .then(() => bus.emitEvent({ type: "board-changed", projectId: run.projectId, detail: run.ticketId }))
+        .catch(() => undefined);
+    } else if (run.streamStalled && run.ticketId && status !== "done") {
+      // Claude's stream dropped before the reply finished — the agent never got to
+      // land its work. Bounce the ticket back to Ready so the autopilot retries it.
+      this.append(
+        run,
+        "system",
+        "⚠ Claude response stalled mid-stream — moving the ticket back to Ready to retry.",
       );
       void updateTicket(run.projectRoot, run.ticketId, { state: "ready" })
         .then(() => bus.emitEvent({ type: "board-changed", projectId: run.projectId, detail: run.ticketId }))
