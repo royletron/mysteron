@@ -268,6 +268,35 @@ test("limit detection ignores tool-result echoes (reading a ticket that mentions
   }
 });
 
+test("a stalled-mid-stream response bounces the ticket back to Ready to retry", async () => {
+  // Ticket UMjv6eWK: 'API Error: Response stalled mid-stream' is transient — the
+  // agent never finished, so the ticket must go back to Ready for the autopilot to
+  // retry rather than be left failed.
+  const proj = path.join(tmp, "stall");
+  const { config } = await initProject(proj, { name: "Stall" });
+  const ticket = await createTicket(proj, { title: "Stalls", state: "ready" });
+
+  const saved = process.env.MYSTERON_AGENT_CMD;
+  process.env.MYSTERON_AGENT_CMD =
+    'echo "API Error: Response stalled mid-stream. The response above may be incomplete." && exit 1';
+  try {
+    const rm = new RunManager();
+    const run = await rm.start({ projectId: config.id, projectRoot: proj, config, ticket });
+    await waitFor(() => rm.get(run.id)?.status !== "running");
+
+    assert.equal(rm.get(run.id)?.status, "failed");
+    assert.ok(rm.get(run.id)!.streamStalled, "the stall error sets streamStalled");
+    assert.equal((await getTicket(proj, ticket.id))?.state, "ready");
+    assert.ok(
+      rm.get(run.id)!.lines.some((l) => /response stalled mid-stream — moving the ticket back to Ready/.test(l.text)),
+      "a retry summary is appended",
+    );
+  } finally {
+    if (saved !== undefined) process.env.MYSTERON_AGENT_CMD = saved;
+    else delete process.env.MYSTERON_AGENT_CMD;
+  }
+});
+
 test("renderStreamEvent turns Claude stream-json into readable lines", () => {
   // Session init.
   assert.match(

@@ -23,6 +23,7 @@ test("transient signals classify as retryable", () => {
   assert.equal(classifyFailure({ limitHit: true }), "retryable");
   assert.equal(classifyFailure({ sessionError: true }), "retryable");
   assert.equal(classifyFailure({ landFailed: true }), "retryable");
+  assert.equal(classifyFailure({ streamStalled: true }), "retryable");
 });
 
 test("a clean agent failure (no transient signal) is non-retryable", () => {

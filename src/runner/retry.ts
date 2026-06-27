@@ -5,8 +5,9 @@
  * It separates two kinds of failure (the autopilot decides which from a finished
  * {@link Run}):
  * - **retryable** — transient: a patch that wouldn't apply, a rejected session, a
- *   usage/limit hit. The ticket was bounced back to `ready`; an immediate retry
- *   would just burn budget, so we space them out with exponential backoff + jitter.
+ *   usage/limit hit, or a streaming response that stalled mid-reply. The ticket was
+ *   bounced back to `ready`; an immediate retry would just burn budget, so we space
+ *   them out with exponential backoff + jitter.
  * - **non-retryable** — a clean agent failure after a real try (it ran, exited
  *   non-zero, no transient signal). Retrying rarely helps, so the cap is lower.
  *
@@ -58,15 +59,18 @@ export function retryPolicyFromEnv(): RetryPolicy {
 
 /**
  * Classify a finished run's failure. The transient signals (`limitHit`,
- * `sessionError`, `landFailed`) are set by the {@link RunManager}; anything else
- * is a clean agent failure we treat as non-retryable.
+ * `sessionError`, `landFailed`, `streamStalled`) are set by the {@link RunManager};
+ * anything else is a clean agent failure we treat as non-retryable.
  */
 export function classifyFailure(run: {
   limitHit?: boolean;
   sessionError?: boolean;
   landFailed?: boolean;
+  streamStalled?: boolean;
 }): FailureKind {
-  return run.limitHit || run.sessionError || run.landFailed ? "retryable" : "non-retryable";
+  return run.limitHit || run.sessionError || run.landFailed || run.streamStalled
+    ? "retryable"
+    : "non-retryable";
 }
 
 /**
