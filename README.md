@@ -101,7 +101,15 @@ A central registry lives at `~/.mysteron/registry.json` (override with `MYSTERON
 The registry is **per-machine** (it just maps a project id to a local path); the
 `.mysteron/` folder is the **shared** state.
 
-Board states: `backlog → ready → in-progress → review → done`.
+Board states: `backlog → ready → in-progress → review → done`, plus `bin` — a
+soft-delete holding area that `done` tickets are swept into automatically after
+~48h.
+
+**Ticket dependencies.** A ticket can declare `blockedBy: [<id>, …]` in its
+frontmatter. It stays out of the runnable queue until every upstream ticket has
+**landed in main** (is `done` and, if it produced a branch, merged) — so
+`next_ticket` and the autopilot skip it and a dependency chain paces itself. The
+inverse ("blocks") is derived and shown in the UI.
 
 ## Companions
 
@@ -344,6 +352,12 @@ Mysteron-Companion: <companion name>
 The **Commits** tab reads `git log` and attributes each commit to a companion via
 that trailer — showing the companion's avatar next to its work (and falling back
 to the git author otherwise).
+
+**Commit strategy.** Where completed work lands is configurable per project
+(`commit` in `config.json`), resolved over the recipe's git default: straight to
+`main`, to a named branch, or a new branch per ticket (`mysteron/<id>`). The same
+resolved strategy drives both the companion's prompt and the landing path
+(`landGuestPatch`), so local and guest runs commit identically.
 
 ## Agent-team recipes
 
