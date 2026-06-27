@@ -790,7 +790,9 @@ export class RunManager {
             branchPrefix: git.branchPrefix,
           });
           run.patchPath = res.patchPath;
-          if (res.ok && res.mode === "current-branch") {
+          if (res.ok && res.mode === "noop") {
+            this.append(run, "system", "ℹ the run's changes were already present — nothing to land.");
+          } else if (res.ok && res.mode === "current-branch") {
             applied = true;
             this.append(run, "system", `✓ changes committed to the current branch (${res.commit?.slice(0, 8)})`);
           } else if (res.ok) {
@@ -959,7 +961,9 @@ export class RunManager {
         branchPrefix: git.branchPrefix,
       });
       run.patchPath = res.patchPath;
-      if (res.ok && res.mode === "current-branch") {
+      if (res.ok && res.mode === "noop") {
+        this.append(run, "system", "ℹ the guest's changes were already present — nothing to land.");
+      } else if (res.ok && res.mode === "current-branch") {
         applied = true;
         this.append(run, "system", `✓ guest changes committed to the current branch (${res.commit?.slice(0, 8)})`);
       } else if (res.ok) {

@@ -169,8 +169,8 @@ export async function lockfileChange(
 
 export interface LandResult {
   ok: boolean;
-  /** How the work landed: into the checked-out branch's working tree, on a (dedicated or named) branch, or not at all. */
-  mode: "current-branch" | "branch" | "failed";
+  /** How the work landed: into the checked-out branch's working tree, on a (dedicated or named) branch, applied to nothing (already present), or not at all. */
+  mode: "current-branch" | "branch" | "noop" | "failed";
   branch?: string;
   commit?: string;
   /** Where the raw patch was saved — always written, so work is never lost even on a failed apply. */
@@ -241,6 +241,15 @@ export async function landGuestPatch(
     await git(["-C", root, "worktree", "add", "-q", "-b", tmpBranch, wt, buildBase]);
     await git(["-C", wt, "apply", "--3way", "--binary", "--whitespace=nowarn", patchPath]);
     await git(["-C", wt, "add", "-A"]);
+    // The patch can apply to nothing — e.g. a resumed run re-emits a diff whose
+    // changes are already in the base. `git commit` errors on an empty tree, so
+    // treat that as a no-op rather than a failed landing.
+    const nothingStaged = await git(["-C", wt, "diff", "--cached", "--quiet"]).then(() => true).catch(() => false);
+    if (nothingStaged) {
+      await exec("git", ["-C", root, "worktree", "remove", "--force", wt]).catch(() => undefined);
+      await git(["-C", root, "branch", "-D", tmpBranch]).catch(() => undefined);
+      return { ok: true, mode: "noop", patchPath };
+    }
     await git(["-C", wt, ...ident, "commit", "-q", "-m", msg]);
     commit = (await git(["-C", wt, "rev-parse", "HEAD"])).stdout.trim();
   } catch (e) {

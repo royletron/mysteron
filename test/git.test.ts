@@ -136,6 +136,24 @@ test("landGuestPatch 3-way merges when the host moved on after dispatch", async 
   assert.equal(await read(root, "a.txt"), "L1\nl2\nL3\n");
 });
 
+test("landGuestPatch reports a no-op when the patch's changes are already present", async () => {
+  const root = await makeRepo();
+  const patch = await guestPatch(root); // edits a.txt, adds b.txt
+  // Host already contains exactly those changes (a resumed run re-emits its diff).
+  await fs.writeFile(path.join(root, "a.txt"), "hello world\n");
+  await fs.writeFile(path.join(root, "b.txt"), "new file\n");
+  await git(root, "add", "-A");
+  await git(root, "commit", "-q", "-m", "already there");
+  const head0 = (await git(root, "rev-parse", "HEAD")).stdout.trim();
+
+  const res = await landGuestPatch(root, { runId: "noop1", ticketId: "tn", patch, message: "Fail on resume", strategy: "current-branch" });
+
+  assert.equal(res.ok, true);
+  assert.equal(res.mode, "noop");
+  assert.equal((await git(root, "rev-parse", "HEAD")).stdout.trim(), head0); // nothing committed
+  assert.equal(await refExists(root, "mysteron/_apply-noop1"), false); // tmp branch cleaned up
+});
+
 test("landGuestPatch (target-branch) commits onto the named branch when it's the checkout", async () => {
   const root = await makeRepo();
   const patch = await guestPatch(root);
