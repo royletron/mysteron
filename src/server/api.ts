@@ -33,6 +33,7 @@ import {
   companionAllowsGuest,
   companionHasHostPins,
   hostsUnavailableMessage,
+  costStats,
   type ProjectConfig,
   type RegistryEntry,
 } from "../core/index.js";
@@ -751,6 +752,11 @@ export function registerApi(
     if (!check) return res.json({ enabled: false });
     const data = await check.handler({}, { projectRoot: r.entry.path, config: r.config });
     res.json({ enabled: true, ...(data as object) });
+  });
+
+  // --- Costs (cross-project spend explorer) --------------------------------
+  app.get("/api/costs", async (_req: Request, res: Response) => {
+    res.json(await costStats());
   });
 
   // --- Static metadata -----------------------------------------------------

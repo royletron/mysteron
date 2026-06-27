@@ -3,7 +3,7 @@ import type { RunLine, RunStatus } from "./api";
 import { subscribeGlobal, subscribeRun } from "./ws";
 
 export interface Route {
-  name: "home" | "project" | "ticket" | "settings";
+  name: "home" | "project" | "ticket" | "settings" | "costs";
   projectId?: string;
   ticketId?: string;
   runId?: string;
@@ -15,6 +15,7 @@ function parseRoute(): Route {
   const hash = location.hash.replace(/^#/, "");
   const parts = hash.split("/").filter(Boolean);
   if (parts[0] === "settings") return { name: "settings" };
+  if (parts[0] === "costs") return { name: "costs" };
   if (parts[0] === "project" && parts[2] === "ticket" && parts[3]) {
     const autostart = parts[4] === "run";
     const runId = parts[4] === "runs" && parts[5] ? parts[5] : undefined;
