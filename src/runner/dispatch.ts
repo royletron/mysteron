@@ -214,7 +214,11 @@ export interface PlanInput {
  */
 export function planAssignments(input: PlanInput): Assignment[] {
   const { config, hostMaxed } = input;
-  const companionFor = (t: Ticket) => getCompanion(config, t.companionId);
+  // The companion a run is *attributed* to — assigned one, else the soloist. Use
+  // the same fallback the run path uses (runningCompanionId / startOnWorker) so an
+  // unassigned ticket still honours the soloist's "runs on" host pin instead of
+  // fanning out to any guest.
+  const companionFor = (t: Ticket) => getCompanion(config, t.companionId) ?? defaultCompanion(config);
   const assignments: Assignment[] = [];
   const takenTickets = new Set<string>();
   const tentativeBusy = new Set<string>(); // companions spoken for during this plan

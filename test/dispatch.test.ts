@@ -208,6 +208,39 @@ test("when the host is maxed, only guests are assigned", () => {
   assert.equal(none.length, 0);
 });
 
+test("unassigned work honours the soloist's host pin — never fans to a forbidden guest", () => {
+  // Soloist pinned to local only. Unassigned work is attributed to it, so it must
+  // NOT be handed to a guest — it runs locally instead.
+  const localOnly = planAssignments({
+    queued: queueOf(ticket("a")),
+    config: config([companion("c1", "soloist", ["local"])]),
+    idleWorkers: [{ id: "w1", label: "box" }],
+    hostMaxed: false,
+    isCompanionBusy: notBusy,
+  });
+  assert.deepEqual(localOnly[0]?.target, { kind: "local", companionId: "c1" });
+
+  // Soloist pinned to "box" only: unassigned work may go to "box"...
+  const onBox = planAssignments({
+    queued: queueOf(ticket("a")),
+    config: config([companion("c1", "soloist", ["box"])]),
+    idleWorkers: [{ id: "w1", label: "box" }],
+    hostMaxed: false,
+    isCompanionBusy: notBusy,
+  });
+  assert.deepEqual(onBox[0]?.target, { kind: "guest", workerId: "w1", label: "box" });
+
+  // ...but never to a guest it isn't pinned to.
+  const onOther = planAssignments({
+    queued: queueOf(ticket("a")),
+    config: config([companion("c1", "soloist", ["box"])]),
+    idleWorkers: [{ id: "w2", label: "elsewhere" }],
+    hostMaxed: false,
+    isCompanionBusy: notBusy,
+  });
+  assert.equal(onOther.length, 0, "unassigned work waits rather than running on a forbidden host");
+});
+
 test("a busy companion is not given a second local task", () => {
   const plan = planAssignments({
     queued: queueOf(ticket("a", { companionId: "c1" })),
