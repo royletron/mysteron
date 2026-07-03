@@ -2,18 +2,22 @@ import { useEffect, useState } from "preact/hooks";
 import { useAsync, useGlobalEvents } from "./hooks";
 import {
   STATE_LABELS,
+  addLocalServer,
   api,
   fmtWhen,
   getAuthStatus,
   getGuestOffer,
   getGuestToken,
   getHostBoard,
+  getLocalServers,
   getWorkers,
   logout,
   mintGuestToken,
+  removeLocalServer,
   revokeGuestToken,
   startGuestOffer,
   stopGuestOffer,
+  type LocalServer,
   type TicketState,
 } from "./api";
 import { LiveDot, WorkerVersion } from "./ui";
@@ -130,6 +134,7 @@ export function Settings() {
 
       <GuestWorkers />
       <OfferAsGuest />
+      <LocalAiServers />
     </div>
   );
 }
@@ -268,6 +273,87 @@ function HostBoard({ nonce }: { nonce: number }) {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+/** Manage machine-local LM Studio (or compatible Anthropic-API) servers. */
+function LocalAiServers() {
+  const [nonce, setNonce] = useState(0);
+  const servers = useAsync(() => getLocalServers(), [nonce]);
+  const [label, setLabel] = useState("");
+  const [url, setUrl] = useState("");
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const add = async () => {
+    if (!label.trim() || !url.trim() || busy) return;
+    setErr("");
+    setBusy(true);
+    try {
+      await addLocalServer({ label: label.trim(), url: url.trim() });
+      setLabel("");
+      setUrl("");
+      setNonce((n) => n + 1);
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async (s: LocalServer) => {
+    if (!confirm(`Remove "${s.label}"?`)) return;
+    await removeLocalServer(s.id);
+    setNonce((n) => n + 1);
+  };
+
+  const list = servers.data?.servers ?? [];
+
+  return (
+    <div class="card mt-4">
+      <h2 class="text-lg font-semibold">Local AI servers</h2>
+      <p class="text-sm text-zinc-400">
+        LM Studio (and any server that exposes an Anthropic-compatible API) can be used instead of Claude.
+        Add a server here, then assign companions to it in the Companions tab.
+      </p>
+
+      {list.length > 0 && (
+        <div class="mt-3 flex flex-col gap-1.5">
+          {list.map((s) => (
+            <div key={s.id} class="flex items-center gap-2 rounded-sm border border-zinc-800 px-2.5 py-1.5 text-sm">
+              <span class="font-medium">{s.label}</span>
+              <span class="text-xs text-zinc-500">{s.url}</span>
+              <div class="flex-1" />
+              <button class="btn btn-danger btn-sm" onClick={() => remove(s)}>
+                Remove
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div class="mt-3 flex flex-col gap-2">
+        <input
+          class="input"
+          placeholder="Label (e.g. LM Studio – Llama 3)"
+          value={label}
+          onInput={(e) => setLabel((e.target as HTMLInputElement).value)}
+        />
+        <div class="flex gap-2">
+          <input
+            class="input flex-1"
+            placeholder="URL (e.g. http://localhost:1234)"
+            value={url}
+            onInput={(e) => setUrl((e.target as HTMLInputElement).value)}
+            onKeyDown={(e) => e.key === "Enter" && add()}
+          />
+          <button class="btn btn-primary btn-sm shrink-0" onClick={add} disabled={!label.trim() || !url.trim() || busy}>
+            Add
+          </button>
+        </div>
+        {err && <p class="text-sm text-red-400">{err}</p>}
+      </div>
     </div>
   );
 }

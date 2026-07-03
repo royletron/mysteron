@@ -55,6 +55,12 @@ export interface Ticket {
   forceSplit?: boolean;
 }
 
+export interface LocalServer {
+  id: string;
+  label: string;
+  url: string;
+}
+
 export interface Companion {
   id: string;
   name: string;
@@ -62,6 +68,8 @@ export interface Companion {
   avatarSeed: string;
   /** Hosts this companion may run on ("local" + guest labels); empty/absent = all. */
   runsOn?: string[];
+  /** Id of a machine-local AI server to route this companion's runs through. */
+  localServerId?: string;
 }
 
 /** Sentinel host id for the local (server) machine in {@link Companion.runsOn}. */
@@ -428,6 +436,13 @@ export const startGuestOffer = (body: { hostUrl: string; token: string; forMs?: 
   api<{ guest: GuestOfferStatus }>("/api/guest", { method: "POST", body: JSON.stringify(body) });
 export const stopGuestOffer = () => api<{ ok: boolean }>("/api/guest", { method: "DELETE" });
 export const getHostBoard = () => api<{ projects: HostBoardProject[] }>("/api/guest/board");
+
+// ---- Local AI servers ---------------------------------------------------
+export const getLocalServers = () => api<{ servers: LocalServer[] }>("/api/local-servers");
+export const addLocalServer = (body: { label: string; url: string }) =>
+  api<{ server: LocalServer }>("/api/local-servers", { method: "POST", body: JSON.stringify(body) });
+export const removeLocalServer = (id: string) =>
+  api<{ ok: boolean }>(`/api/local-servers/${id}`, { method: "DELETE" });
 
 // ---- shared display constants -------------------------------------------
 export const STATE_LABELS: Record<TicketState, string> = {

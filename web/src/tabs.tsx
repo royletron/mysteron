@@ -4,6 +4,7 @@ import {
   fmtBytes,
   fmtNum,
   fmtWhen,
+  getLocalServers,
   getWorkers,
   LOCAL_HOST,
   type BranchInfo,
@@ -11,6 +12,7 @@ import {
   type CommitMode,
   type CommitResult,
   type Companion,
+  type LocalServer,
   type OriginStatus,
   type ProjectConfig,
   type ProjectDetail,
@@ -631,6 +633,8 @@ export function CompanionTab({ detail }: { detail: ProjectDetail }) {
   useGlobalEvents(() => setWorkerNonce((n) => n + 1));
   const workers = useAsync(() => getWorkers(), [workerNonce]);
   const guestHosts = (workers.data?.workers ?? []).map((w) => ({ label: w.label, online: true }));
+  const localServersAsync = useAsync(() => getLocalServers(), []);
+  const localServers = localServersAsync.data?.servers ?? [];
   const [saving, setSaving] = useState("");
   const [newRole, setNewRole] = useState("");
   const [addingCompanion, setAddingCompanion] = useState(false);
@@ -685,6 +689,7 @@ export function CompanionTab({ detail }: { detail: ProjectDetail }) {
               activeRun={(detail.activeRuns ?? []).find((r) => r.companionId === comp.id)}
               canDelete={c.companions.length > 1}
               guestHosts={guestHosts}
+              localServers={localServers}
             />
           ))}
         </div>
@@ -1142,12 +1147,14 @@ function CompanionRow({
   activeRun,
   canDelete,
   guestHosts,
+  localServers,
 }: {
   projectId: string;
   companion: Companion;
   activeRun?: RunSummary;
   canDelete: boolean;
   guestHosts: { label: string; online: boolean }[];
+  localServers: LocalServer[];
 }) {
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -1178,6 +1185,21 @@ function CompanionRow({
   };
   const toggleHost = (host: string) =>
     setRunsOn(runsOn.includes(host) ? runsOn.filter((h) => h !== host) : [...runsOn, host]);
+
+  const setLocalServer = async (localServerId: string | null) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await api(`/api/projects/${projectId}/config`, {
+        method: "PATCH",
+        body: JSON.stringify({ setCompanionLocalServer: { id: companion.id, localServerId } }),
+      });
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const regenerate = async () => {
     if (busy) return;
@@ -1290,6 +1312,29 @@ function CompanionRow({
           />
         ))}
       </div>
+      {localServers.length > 0 && (
+        <div class="mt-2 flex items-center gap-2 border-t border-zinc-800/70 pt-2">
+          <span class="text-xs text-zinc-500" title="Local AI server for this companion's runs">
+            AI server
+          </span>
+          <select
+            class="input max-w-[220px] text-xs"
+            value={companion.localServerId ?? ""}
+            disabled={busy}
+            onChange={(e) => {
+              const val = (e.target as HTMLSelectElement).value;
+              setLocalServer(val || null);
+            }}
+          >
+            <option value="">Default (Claude / proxy)</option>
+            {localServers.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
       {editing && (
         <div class="mt-2">
           <CodeEditor
