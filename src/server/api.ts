@@ -53,7 +53,8 @@ import { registerAuth } from "./auth.js";
 import { createWorkerMcp } from "./worker-mcp.js";
 import type { WorkerRegistry } from "./workers.js";
 import type { GuestController } from "./guest-controller.js";
-import { loadSettings, verifyGuestToken } from "../core/settings.js";
+import { loadSettings, saveSettings, verifyGuestToken } from "../core/settings.js";
+import type { LocalServer } from "../core/types.js";
 import { workingTreeRef, listBranches, currentBranch, mergeBranch, deleteBranch, originStatus, pushCurrentBranch, workingTreeStatus, commitWorkingTree } from "../core/git.js";
 
 interface ResolvedProject {
@@ -232,6 +233,29 @@ export function registerApi(
     }
   });
 
+  // --- Local AI servers (machine-local, stored in ~/.mysteron/settings.json) --
+  app.get("/api/local-servers", async (_req: Request, res: Response) => {
+    const s = await loadSettings();
+    res.json({ servers: s.localServers ?? [] });
+  });
+
+  app.post("/api/local-servers", async (req: Request, res: Response) => {
+    const { label, url } = (req.body ?? {}) as { label?: string; url?: string };
+    if (!label?.trim() || !url?.trim()) return res.status(400).json({ error: "label and url are required" });
+    const s = await loadSettings();
+    const server: LocalServer = { id: randomUUID(), label: label.trim(), url: url.trim() };
+    s.localServers = [...(s.localServers ?? []), server];
+    await saveSettings(s);
+    res.json({ server });
+  });
+
+  app.delete("/api/local-servers/:serverId", async (req: Request, res: Response) => {
+    const s = await loadSettings();
+    s.localServers = (s.localServers ?? []).filter((srv) => srv.id !== req.params.serverId);
+    await saveSettings(s);
+    res.json({ ok: true });
+  });
+
   // --- Projects ------------------------------------------------------------
   app.get("/api/projects", async (_req: Request, res: Response) => {
     const reg = await loadRegistry();
@@ -407,7 +431,7 @@ export function registerApi(
   app.patch("/api/projects/:id/config", async (req: Request, res: Response) => {
     const r = await resolve(req.params.id);
     if (!r) return notFound(res);
-    const { yolo, recipe, commit, allowedTools, disallowedTools, regenerateCompanionId, pluginOptions, addCompanion, deleteCompanionId, setCompanionRunsOn } = (req.body ?? {}) as {
+    const { yolo, recipe, commit, allowedTools, disallowedTools, regenerateCompanionId, pluginOptions, addCompanion, deleteCompanionId, setCompanionRunsOn, setCompanionLocalServer } = (req.body ?? {}) as {
       yolo?: boolean;
       recipe?: string;
       commit?: ProjectConfig["commit"] | null;
@@ -418,6 +442,7 @@ export function registerApi(
       addCompanion?: { role: string };
       deleteCompanionId?: string;
       setCompanionRunsOn?: { id: string; runsOn: string[] };
+      setCompanionLocalServer?: { id: string; localServerId: string | null };
     };
     const next = { ...r.config, companions: [...r.config.companions] };
     if (typeof yolo === "boolean") next.yolo = yolo;
@@ -468,6 +493,14 @@ export function registerApi(
       const runsOn = setCompanionRunsOn.runsOn.map(String).map((h) => h.trim()).filter(Boolean);
       next.companions = next.companions.map((c) =>
         c.id === setCompanionRunsOn.id ? { ...c, runsOn: runsOn.length ? runsOn : undefined } : c,
+      );
+    }
+    // Assign a local AI server to a companion (null clears it).
+    if (setCompanionLocalServer && typeof setCompanionLocalServer.id === "string") {
+      next.companions = next.companions.map((c) =>
+        c.id === setCompanionLocalServer.id
+          ? { ...c, localServerId: setCompanionLocalServer.localServerId ?? undefined }
+          : c,
       );
     }
     await saveProjectConfig(r.entry.path, next);

@@ -31,6 +31,7 @@ export interface GuestSettings {
 export interface AppSettings {
   auth: AuthSettings;
   guest?: GuestSettings;
+  localServers?: import("./types.js").LocalServer[];
 }
 
 function settingsPath(): string {

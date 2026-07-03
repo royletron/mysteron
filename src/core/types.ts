@@ -77,6 +77,18 @@ export interface Ticket {
 }
 
 /**
+ * A local LM Studio (or compatible Anthropic-API) server, stored in
+ * ~/.mysteron/settings.json so it stays machine-local and out of git.
+ */
+export interface LocalServer {
+  id: string;
+  /** Human-readable label, e.g. "LM Studio – Llama 3". */
+  label: string;
+  /** Base URL the server listens on, e.g. "http://localhost:1234". */
+  url: string;
+}
+
+/**
  * A companion is a first-class, named agent identity that lives with the
  * project (committed in .mysteron/config.json, so every machine agrees who's who).
  * Its role comes from the project's recipe; runs of a companion are per-machine.
@@ -98,6 +110,13 @@ export interface Companion {
    * a listed host; if none is free it errors (or, under autopilot, waits).
    */
   runsOn?: string[];
+  /**
+   * Id of a {@link LocalServer} from the machine-local settings. When set,
+   * the companion's runs point ANTHROPIC_BASE_URL at that server instead of
+   * the default (Anthropic API or rate-limit proxy). Absent means use the
+   * default.
+   */
+  localServerId?: string;
 }
 
 /** Sentinel in {@link Companion.runsOn} for the local (server) machine. */

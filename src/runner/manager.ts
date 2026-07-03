@@ -31,6 +31,7 @@ import { defaultCompanion, getCompanion, readCompanionSpec } from "../core/compa
 import type { WorkerRegistry, GuestRunResult } from "../server/workers.js";
 import { ETIQUETTE_DOC, SPEC_DOC, runsDir } from "../core/paths.js";
 import type { Companion, ProjectConfig, Ticket } from "../core/types.js";
+import { loadSettings } from "../core/settings.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -706,6 +707,12 @@ export class RunManager {
     this.append(run, "system", `cwd: ${workdir}`);
     void this.persist(run); // initial record, so even a crashed run leaves history
 
+    // If the companion is assigned to a local AI server, resolve its URL now so
+    // we can override ANTHROPIC_BASE_URL for the child process.
+    const localServerUrl = companion?.localServerId
+      ? (await loadSettings()).localServers?.find((s) => s.id === companion.localServerId)?.url
+      : undefined;
+
     const child = spawn(cmd, cmdArgs, {
       cwd: workdir,
       shell,
@@ -717,12 +724,11 @@ export class RunManager {
         MYSTERON_TICKET_TITLE: args.ticket.title,
         MYSTERON_TICKET_PROMPT: prompt,
         MYSTERON_YOLO: args.config.yolo ? "1" : "0",
-        // Route the agent's Anthropic traffic through Mysteron's capture proxy so
-        // we can read real usage limits off the response headers. The proxy
-        // forwards to the original upstream (which it captured at startup), so
-        // overriding the child's base URL here doesn't create a loop. Harmless
-        // for non-Anthropic custom agents (they ignore it).
-        ...(process.env.MYSTERON_RATELIMIT_PROXY_URL
+        // A companion-assigned local server takes precedence; otherwise route
+        // through the rate-limit proxy (if running) so usage headers are captured.
+        ...(localServerUrl
+          ? { ANTHROPIC_BASE_URL: localServerUrl }
+          : process.env.MYSTERON_RATELIMIT_PROXY_URL
           ? { ANTHROPIC_BASE_URL: process.env.MYSTERON_RATELIMIT_PROXY_URL }
           : {}),
       },
