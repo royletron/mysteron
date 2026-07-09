@@ -240,7 +240,7 @@ function DailyChart({ daily }: { daily: DailyCost[] }) {
       {daily.map((d) => (
         <div
           key={d.date}
-          class="group flex min-w-[8px] flex-1 flex-col items-center justify-end gap-1"
+          class="group flex h-full min-w-[8px] flex-1 flex-col items-center justify-end gap-1"
           title={`${d.date} · ${fmtUsd(d.totalUsd)} · ${d.runs} run${d.runs === 1 ? "" : "s"}`}
         >
           <div
