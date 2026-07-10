@@ -12,6 +12,8 @@ export interface GuestRunResult {
   commitMessage?: string;
   costUsd?: number;
   numTurns?: number;
+  /** True when the guest successfully pushed commits directly to the host via git-HTTP. */
+  pushed?: boolean;
 }
 
 /** A connected guest worker, as exposed to the UI (no socket). */
@@ -183,6 +185,7 @@ export class WorkerRegistry {
             commitMessage: msg.commitMessage,
             costUsd: msg.costUsd,
             numTurns: msg.numTurns,
+            pushed: msg.pushed,
           });
         }
       });

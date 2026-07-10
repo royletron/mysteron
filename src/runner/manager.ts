@@ -1026,6 +1026,23 @@ export class RunManager {
     // moves on. Released once the result lands (see applyGuestResult).
     const baseRef = await captureSnapshotRef(args.projectRoot, id);
 
+    // For per-ticket strategy, ensure the ticket branch exists up front so the
+    // guest can push onto it, and install the pre-receive hook that guards it.
+    const git = resolveProjectGit(args.config);
+    let gitPath: string | undefined;
+    let ticketBranch: string | undefined;
+    if (git.strategy === "new-branch") {
+      const branch = ticketBranchName(git.branchPrefix, args.ticket.id);
+      await ensureTicketBranch(args.projectRoot, branch);
+      ticketBranch = branch;
+      gitPath = `/api/worker/git/${id}`;
+      // Guard: only allow pushes to refs/heads/<prefix>* (never main/current-branch).
+      const prefix = git.branchPrefix ?? "mysteron/";
+      const hookPath = path.join(args.projectRoot, ".git", "hooks", "pre-receive");
+      const hook = `#!/bin/sh\nPREFIX="${prefix}"\nwhile IFS=" " read -r _old _new ref; do\n  case "$ref" in refs/heads/\${PREFIX}*) ;;\n  *) echo "error: push to '\$ref' blocked by Mysteron" >&2; exit 1;; esac\ndone\n`;
+      await fs.writeFile(hookPath, hook, { mode: 0o755 });
+    }
+
     const run: Run = {
       id,
       projectId: args.projectId,
@@ -1037,6 +1054,7 @@ export class RunManager {
       hostname: worker.label, // attribute the run to the guest machine
       guestLabel: worker.label,
       baseRef,
+      branch: ticketBranch,
       status: "running",
       command: `guest:${worker.label} ▶ ${args.ticket.title}`,
       startedAt: new Date().toISOString(),
@@ -1065,6 +1083,8 @@ export class RunManager {
       prompt,
       snapshotPath: `/api/worker/snapshot/${run.id}`,
       mcpPath: `/api/worker/mcp/${run.id}`,
+      gitPath,
+      ticketBranch,
       yolo: args.config.yolo,
       allowedTools: allowed,
       disallowedTools: disallowed,
@@ -1090,6 +1110,15 @@ export class RunManager {
     if (!run || run.status !== "running") return;
     if (result.costUsd != null) run.costUsd = result.costUsd;
     if (result.numTurns != null) run.numTurns = result.numTurns;
+
+    // Guest pushed directly to the ticket branch — no patch to apply.
+    if (result.pushed && result.status === "done") {
+      await releaseSnapshotRef(run.projectRoot, run.id);
+      this.append(run, "system", `✓ guest pushed commits to branch ${run.branch}`);
+      await updateTicket(run.projectRoot, run.ticketId, { state: "review" }).catch(() => undefined);
+      this.finish(run, result.status, result.exitCode);
+      return;
+    }
 
     let applied = false;
     const patch = result.patchBase64 ? Buffer.from(result.patchBase64, "base64").toString("utf8") : "";

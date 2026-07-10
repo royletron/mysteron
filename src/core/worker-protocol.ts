@@ -78,6 +78,8 @@ export interface RunDoneMsg {
   commitMessage?: string;
   costUsd?: number;
   numTurns?: number;
+  /** True when the guest pushed its commits directly to the host via git-HTTP (no patchBase64 needed). */
+  pushed?: boolean;
 }
 
 export type GuestMsg = RegisterMsg | HeartbeatMsg | QuotaMsg | RunLineMsg | RunDoneMsg;
@@ -115,6 +117,10 @@ export interface DispatchMsg {
   snapshotPath: string;
   /** Host path of the live MCP (board/docs/memory) for this run; guest prefixes its host URL and points Claude at it over HTTP. */
   mcpPath?: string;
+  /** Host git-HTTP path; guest prefixes its host URL to use as a push remote. Only set when the project uses per-ticket branch strategy. */
+  gitPath?: string;
+  /** The ticket branch name the guest should push commits onto (e.g. "mysteron/abc123"). */
+  ticketBranch?: string;
   yolo: boolean;
   allowedTools: string[];
   disallowedTools: string[];

@@ -445,6 +445,7 @@ async function handleDispatch(
   let commitMessage: string | undefined;
   let costUsd: number | undefined;
   let numTurns: number | undefined;
+  let pushed = false;
 
   try {
     await fs.mkdir(workdir, { recursive: true });
@@ -465,6 +466,19 @@ async function handleDispatch(
     await git(["add", "-A"]);
     await git(["commit", "-q", "-m", "base", "--allow-empty"]);
     const base = (await git(["rev-parse", "HEAD"])).stdout.trim();
+
+    // When the host provided a git-HTTP remote, set it as origin so the guest can
+    // push commits directly. Fetch the ticket branch first to resume prior work.
+    if (msg.gitPath && msg.ticketBranch) {
+      const originUrl = new URL(msg.gitPath, hostUrl).toString();
+      await git(["remote", "add", "origin", originUrl]);
+      await git(["config", "http.extraHeader", `x-mysteron-guest-token: ${token}`]);
+      const fetched = await git(["fetch", "origin", msg.ticketBranch]).then(() => true).catch(() => false);
+      if (fetched) {
+        // Continue from where the ticket branch left off (prior run's commits).
+        await git(["checkout", "-B", msg.ticketBranch, "FETCH_HEAD"]).catch(() => undefined);
+      }
+    }
 
     line("system", `▶ running locally for "${msg.ticketTitle}"…`);
     const mcpUrl = msg.mcpPath ? new URL(msg.mcpPath, hostUrl).toString() : undefined;
@@ -493,16 +507,25 @@ async function handleDispatch(
     await git(["add", "-A"]);
     const pending = (await git(["diff", "--cached", "--name-only"])).stdout.trim();
     if (pending) await git(["commit", "-q", "-m", agentCommits > 0 ? "chore: capture uncommitted changes" : "work"]);
-    const { stdout: patch } = await git(["diff", "--binary", base, "HEAD"]);
-    patchBase64 = Buffer.from(patch, "utf8").toString("base64");
+
+    // Try pushing to the host branch; fall back to patch if the push fails.
+    if (msg.gitPath && msg.ticketBranch) {
+      pushed = await git(["push", "origin", `HEAD:${msg.ticketBranch}`]).then(() => true).catch(() => false);
+      if (!pushed) line("system", "⚠ push failed — falling back to patch");
+    }
+
+    if (!pushed) {
+      const { stdout: patch } = await git(["diff", "--binary", base, "HEAD"]);
+      patchBase64 = Buffer.from(patch, "utf8").toString("base64");
+    }
     status = exitCode === 0 ? "done" : "failed";
-    line("system", status === "done" ? "✓ done — returning patch" : "✖ run failed");
+    line("system", pushed ? "✓ done — pushed to host branch" : status === "done" ? "✓ done — returning patch" : "✖ run failed");
   } catch (e) {
     line("system", `✖ guest error: ${(e as Error).message}`);
     status = "failed";
   } finally {
     await fs.rm(workdir, { recursive: true, force: true }).catch(() => undefined);
-    socket.send(JSON.stringify({ t: "run-done", runId: msg.runId, status, exitCode, patchBase64, commitMessage, costUsd, numTurns }));
+    socket.send(JSON.stringify({ t: "run-done", runId: msg.runId, status, exitCode, patchBase64, commitMessage, costUsd, numTurns, pushed: pushed || undefined }));
   }
   return { status, costUsd, numTurns };
 }

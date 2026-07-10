@@ -56,6 +56,8 @@ import type { GuestController } from "./guest-controller.js";
 import { loadSettings, saveSettings, verifyGuestToken } from "../core/settings.js";
 import type { LocalServer } from "../core/types.js";
 import { workingTreeRef, listBranches, currentBranch, mergeBranch, deleteBranch, originStatus, pushCurrentBranch, workingTreeStatus, commitWorkingTree } from "../core/git.js";
+import { promises as fs } from "node:fs";
+import path from "node:path";
 
 interface ResolvedProject {
   entry: RegistryEntry;
@@ -165,6 +167,64 @@ export function registerApi(
       if (!res.headersSent) res.status(500);
       res.end();
     });
+  });
+
+  // git smart-HTTP endpoint so a guest can push commits directly onto the ticket branch.
+  // Token-gated; serves both upload-pack (fetch) and receive-pack (push) via git http-backend.
+  app.use("/api/worker/git/:runId", async (req: Request, res: Response) => {
+    const token = (req.header("x-mysteron-guest-token") || "").toString();
+    const settings = await loadSettings();
+    if (!verifyGuestToken(settings, token)) return res.status(401).end();
+    const run = runs.get(req.params.runId);
+    if (!run) return res.status(404).end();
+
+    const projectRoot = run.projectRoot;
+    const subPath = req.path; // e.g. /info/refs or /git-receive-pack
+    const qs = req.url.includes("?") ? req.url.slice(req.url.indexOf("?") + 1) : "";
+
+    const config = await loadProjectConfig(projectRoot);
+    const branchPrefix = (config?.commit?.mode === "per-ticket" ? config.commit.branchPrefix?.trim() : undefined) || "mysteron/";
+
+    const env: Record<string, string> = {
+      ...Object.fromEntries(Object.entries(process.env).filter(([, v]) => v != null) as [string, string][]),
+      GIT_HTTP_EXPORT_ALL: "1",
+      GIT_PROJECT_ROOT: path.dirname(projectRoot),
+      PATH_INFO: `/${path.basename(projectRoot)}${subPath}`,
+      QUERY_STRING: qs,
+      REQUEST_METHOD: req.method,
+      CONTENT_TYPE: req.header("content-type") ?? "",
+      CONTENT_LENGTH: req.header("content-length") ?? "0",
+      REMOTE_ADDR: req.socket.remoteAddress ?? "127.0.0.1",
+      MYSTERON_PUSH_PREFIX: branchPrefix,
+    };
+
+    const backend = spawn("git", ["http-backend"], { env });
+    req.pipe(backend.stdin);
+
+    // Parse CGI headers (terminated by \r\n\r\n) then forward the body.
+    const bufs: Buffer[] = [];
+    let headersDone = false;
+    backend.stdout.on("data", (chunk: Buffer) => {
+      if (headersDone) { res.write(chunk); return; }
+      bufs.push(chunk);
+      const combined = Buffer.concat(bufs);
+      const sep = combined.indexOf("\r\n\r\n");
+      if (sep < 0) return;
+      for (const line of combined.subarray(0, sep).toString().split("\r\n")) {
+        const colon = line.indexOf(":");
+        if (colon < 0) continue;
+        const key = line.slice(0, colon).trim().toLowerCase();
+        const val = line.slice(colon + 1).trim();
+        if (key === "status") { const c = parseInt(val); if (!isNaN(c)) res.status(c); }
+        else res.setHeader(key, val);
+      }
+      headersDone = true;
+      const body = combined.subarray(sep + 4);
+      if (body.length) res.write(body);
+    });
+    backend.stdout.on("end", () => res.end());
+    backend.on("error", () => { if (!res.headersSent) res.status(500).end(); else res.end(); });
+    backend.stderr.on("data", () => undefined); // suppress CGI error output leaking to server stderr
   });
 
   // A read-only board snapshot for a guest to view in their own app (token-gated).
