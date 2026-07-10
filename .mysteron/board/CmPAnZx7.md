@@ -1,13 +1,14 @@
 ---
 title: Dream Mode
-state: backlog
+state: review
 priority: medium
 companionId: c1bf55fe-3e93-410d-94a7-cfde4dc1f80e
 assignee: Waldorf the Compiler
 labels:
   - dream
 created: '2026-07-03T10:40:56.567Z'
-updated: '2026-07-03T21:52:25.652Z'
+updated: '2026-07-10T08:59:48.762Z'
+order: 1
 ---
 
 The aim of this optional feature is to produce tickets that feed into the improvement of the project whilst credits are available, agents are idle and the humans are asleep. 
