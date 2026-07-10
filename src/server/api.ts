@@ -54,6 +54,7 @@ import { createWorkerMcp } from "./worker-mcp.js";
 import type { WorkerRegistry } from "./workers.js";
 import type { GuestController } from "./guest-controller.js";
 import { loadSettings, saveSettings, verifyGuestToken } from "../core/settings.js";
+import { DreamRunner } from "../runner/dream.js";
 import type { LocalServer } from "../core/types.js";
 import { workingTreeRef, listBranches, currentBranch, mergeBranch, deleteBranch, originStatus, pushCurrentBranch, workingTreeStatus, commitWorkingTree } from "../core/git.js";
 import { promises as fs } from "node:fs";
@@ -96,6 +97,7 @@ export function registerApi(
   autopilot: Autopilot,
   workers: WorkerRegistry,
   guest: GuestController,
+  dream: DreamRunner,
   opts: ApiOptions = {},
 ): void {
   const verbose = opts.verbose ?? false;
@@ -491,7 +493,7 @@ export function registerApi(
   app.patch("/api/projects/:id/config", async (req: Request, res: Response) => {
     const r = await resolve(req.params.id);
     if (!r) return notFound(res);
-    const { yolo, recipe, commit, allowedTools, disallowedTools, regenerateCompanionId, pluginOptions, addCompanion, deleteCompanionId, setCompanionRunsOn, setCompanionLocalServer } = (req.body ?? {}) as {
+    const { yolo, recipe, commit, allowedTools, disallowedTools, regenerateCompanionId, pluginOptions, addCompanion, deleteCompanionId, setCompanionRunsOn, setCompanionLocalServer, dream } = (req.body ?? {}) as {
       yolo?: boolean;
       recipe?: string;
       commit?: ProjectConfig["commit"] | null;
@@ -503,6 +505,7 @@ export function registerApi(
       deleteCompanionId?: string;
       setCompanionRunsOn?: { id: string; runsOn: string[] };
       setCompanionLocalServer?: { id: string; localServerId: string | null };
+      dream?: ProjectConfig["dream"] | null;
     };
     const next = { ...r.config, companions: [...r.config.companions] };
     if (typeof yolo === "boolean") next.yolo = yolo;
@@ -523,6 +526,10 @@ export function registerApi(
     if (Array.isArray(allowedTools)) next.allowedTools = allowedTools.map(String).filter((t) => t.trim());
     if (Array.isArray(disallowedTools)) next.disallowedTools = disallowedTools.map(String).filter((t) => t.trim());
     if (pluginOptions !== undefined) next.pluginOptions = pluginOptions;
+    if (dream !== undefined) {
+      if (dream === null) delete next.dream;
+      else next.dream = { enabled: Boolean(dream.enabled), scheduleHours: dream.scheduleHours };
+    }
     // Changing the recipe rebuilds the companion roster.
     if (typeof recipe === "string" && recipe !== next.recipe) {
       if (!findRecipe(recipe)) return res.status(400).json({ error: `unknown recipe: ${recipe}` });
@@ -567,6 +574,14 @@ export function registerApi(
     await seedCompanionSpecs(r.entry.path, next);
     bus.emitEvent({ type: "config-changed", projectId: r.entry.id });
     res.json({ config: next });
+  });
+
+  // Dream mode state + memory for the project settings UI.
+  app.get("/api/projects/:id/dream", async (req: Request, res: Response) => {
+    const r = await resolve(req.params.id);
+    if (!r) return notFound(res);
+    const [state, memory] = await Promise.all([dream.state(r.entry.path), dream.memory(r.entry.path)]);
+    res.json({ state, memory });
   });
 
   // Companion role-spec docs (seeded from the recipe, editable here).

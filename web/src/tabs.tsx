@@ -4,6 +4,7 @@ import {
   fmtBytes,
   fmtNum,
   fmtWhen,
+  getDreamStatus,
   getLocalServers,
   getWorkers,
   LOCAL_HOST,
@@ -12,6 +13,9 @@ import {
   type CommitMode,
   type CommitResult,
   type Companion,
+  type DreamConfig,
+  type DreamState,
+  type DreamMemoryEntry,
   type LocalServer,
   type OriginStatus,
   type ProjectConfig,
@@ -552,6 +556,93 @@ const COMMIT_MODES: { mode: CommitMode; title: string; desc: string }[] = [
  * Choose where completed work is committed. Both local and guest runs honour it,
  * so the whole project lands work the same way regardless of which machine ran it.
  */
+function DreamModeCard({ projectId, config }: { projectId: string; config: ProjectConfig }) {
+  const { data, reload } = useAsync(() => getDreamStatus(projectId), [projectId]);
+  const [saving, setSaving] = useState(false);
+  const [scheduleHours, setScheduleHours] = useState(String(config.dream?.scheduleHours ?? 24));
+
+  const saveDream = async (enabled: boolean) => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      await api(`/api/projects/${projectId}/config`, {
+        method: "PATCH",
+        body: JSON.stringify({ dream: { enabled, scheduleHours: Number(scheduleHours) || 24 } }),
+      });
+      await reload();
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const enabled = config.dream?.enabled ?? false;
+  const state: DreamState = data?.state ?? { runCount: 0, lastTicketsCreated: 0 };
+  const memory: DreamMemoryEntry[] = data?.memory?.tickets ?? [];
+
+  return (
+    <div class="card mt-4">
+      <div class="flex items-center justify-between gap-2">
+        <div>
+          <h2 class="text-lg font-semibold">Dream mode</h2>
+          <p class="text-sm text-zinc-400">
+            Periodically runs an AI agent to generate backlog ticket ideas — bugs, features, and improvements.
+          </p>
+        </div>
+        <button
+          class={`btn btn-sm shrink-0 ${enabled ? "btn-primary" : ""}`}
+          disabled={saving}
+          onClick={() => saveDream(!enabled)}
+        >
+          {saving ? "Saving…" : enabled ? "Enabled" : "Disabled"}
+        </button>
+      </div>
+
+      {enabled && (
+        <div class="mt-3 flex flex-col gap-2">
+          <div class="flex items-center gap-2">
+            <label class="text-sm text-zinc-400 shrink-0">Run every</label>
+            <input
+              class="input w-20"
+              type="number"
+              min="1"
+              max="720"
+              value={scheduleHours}
+              onInput={(e) => setScheduleHours((e.target as HTMLInputElement).value)}
+            />
+            <span class="text-sm text-zinc-400">hours</span>
+            <button class="btn btn-sm ml-2" disabled={saving} onClick={() => saveDream(true)}>
+              Save
+            </button>
+          </div>
+
+          {state.lastRunAt && (
+            <p class="text-xs text-zinc-500">
+              Last run {fmtWhen(state.lastRunAt)} · {state.lastTicketsCreated} ticket{state.lastTicketsCreated === 1 ? "" : "s"} created · {state.runCount} run{state.runCount === 1 ? "" : "s"} total
+            </p>
+          )}
+
+          {memory.length > 0 && (
+            <details class="mt-1">
+              <summary class="cursor-pointer text-xs text-zinc-500 hover:text-zinc-300">
+                {memory.length} ticket{memory.length === 1 ? "" : "s"} created by dream mode
+              </summary>
+              <ul class="mt-1 space-y-0.5 pl-2">
+                {memory.map((t) => (
+                  <li key={t.id} class="text-xs text-zinc-400">
+                    {t.title} <span class="text-zinc-600">({t.id})</span>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CommitStrategyCard({ projectId, config }: { projectId: string; config: ProjectConfig }) {
   const current = config.commit;
   const [branch, setBranch] = useState(current?.branch ?? "");
@@ -764,6 +855,7 @@ export function CompanionTab({ detail }: { detail: ProjectDetail }) {
       </div>
 
       <CommitStrategyCard projectId={detail.entry.id} config={c} />
+      <DreamModeCard projectId={detail.entry.id} config={c} />
     </div>
   );
 }

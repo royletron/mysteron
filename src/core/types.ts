@@ -194,6 +194,14 @@ export interface ProjectConfig {
     };
   };
   createdAt: string;
+  /** Dream mode: periodically runs an AI agent to generate backlog ticket ideas. */
+  dream?: DreamConfig;
+}
+
+export interface DreamConfig {
+  enabled: boolean;
+  /** Hours between dream runs (default 24 = nightly). */
+  scheduleHours?: number;
 }
 
 export interface RegistryEntry {

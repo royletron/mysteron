@@ -83,6 +83,23 @@ export interface CommitStrategy {
   branchPrefix?: string;
 }
 
+export interface DreamConfig {
+  enabled: boolean;
+  scheduleHours?: number;
+}
+
+export interface DreamState {
+  lastRunAt?: string;
+  runCount: number;
+  lastTicketsCreated: number;
+}
+
+export interface DreamMemoryEntry {
+  id: string;
+  title: string;
+  createdAt: string;
+}
+
 export interface ProjectConfig {
   id: string;
   name: string;
@@ -98,7 +115,11 @@ export interface ProjectConfig {
     "usage-monitor"?: { tokenLimit?: number; windowHours?: number };
   };
   createdAt: string;
+  dream?: DreamConfig;
 }
+
+export const getDreamStatus = (projectId: string) =>
+  api<{ state: DreamState; memory: { tickets: DreamMemoryEntry[] } }>(`/api/projects/${projectId}/dream`);
 
 export type AutopilotStatus = "running" | "paused" | "idle" | "stopped";
 

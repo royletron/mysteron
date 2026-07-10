@@ -16,6 +16,8 @@ import { WorkerRegistry } from "./workers.js";
 import { startGuestSpinner } from "./guest-spinner.js";
 import { GuestController } from "./guest-controller.js";
 import { isAuthedByCookieHeader } from "./auth.js";
+import { DreamRunner } from "../runner/dream.js";
+import { loadProjectConfig } from "../core/project.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -107,6 +109,25 @@ export async function serve(opts: ServeOptions = {}): Promise<{ port: number; cl
   const binTimer = setInterval(() => void sweepBins(), 60 * 60 * 1000);
   binTimer.unref?.();
 
+  // Dream mode: check hourly if any project is due for a dream run.
+  const dream = new DreamRunner();
+  const checkDreams = async () => {
+    const reg = await loadRegistry();
+    for (const p of reg.projects) {
+      try {
+        const config = await loadProjectConfig(p.path);
+        if (config?.dream?.enabled) {
+          void dream.check(p.path, p.id, config.dream, verbose);
+        }
+      } catch {
+        /* one bad project must not stop the check */
+      }
+    }
+  };
+  void checkDreams();
+  const dreamTimer = setInterval(() => void checkDreams(), 60 * 60 * 1000);
+  dreamTimer.unref?.();
+
   if (verbose) {
     bus.on("mysteron", (e) => console.log("[mysteron] event", e));
     bus.on("autopilot", (e) => console.log("[mysteron] autopilot", e));
@@ -117,7 +138,7 @@ export async function serve(opts: ServeOptions = {}): Promise<{ port: number; cl
   }
 
   const app = express();
-  registerApi(app, watcher, runs, autopilot, workers, guest, { verbose });
+  registerApi(app, watcher, runs, autopilot, workers, guest, dream, { verbose });
   // Vite content-hashes assets (safe to cache forever); index.html references
   // them, so it must never be cached or a rebuild won't be picked up.
   app.use(
@@ -140,6 +161,7 @@ export async function serve(opts: ServeOptions = {}): Promise<{ port: number; cl
         port,
         close: async () => {
           clearInterval(binTimer);
+          clearInterval(dreamTimer);
           stopGuestSpinner();
           stopWorkerSweep();
           await watcher.stop();

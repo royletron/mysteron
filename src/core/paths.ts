@@ -53,3 +53,14 @@ export function autopilotIntentPath(projectRoot: string): string {
 
 export const ETIQUETTE_DOC = "ETIQUETTE.md";
 export const SPEC_DOC = "SPEC.md";
+export const DREAM_SPEC_DOC = "DREAM.md";
+
+/** Persisted dream mode run state (last run time, ticket counts). */
+export function dreamStatePath(projectRoot: string): string {
+  return path.join(projectMysteronDir(projectRoot), "dream-state.json");
+}
+
+/** Dream mode memory: ticket IDs + titles previously created, to avoid duplicates. */
+export function dreamMemoryPath(projectRoot: string): string {
+  return path.join(projectMysteronDir(projectRoot), "dream-memory.json");
+}
