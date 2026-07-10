@@ -1,13 +1,16 @@
 ---
 title: 'Git: host-as-origin live push for remote (guest) workers'
-state: backlog
+state: review
 priority: medium
+companionId: c1bf55fe-3e93-410d-94a7-cfde4dc1f80e
 createdBy: c1bf55fe-3e93-410d-94a7-cfde4dc1f80e
+assignee: Waldorf the Compiler
 labels:
   - v2
   - git
 created: '2026-06-30T13:15:09.914Z'
-updated: '2026-06-30T13:15:09.914Z'
+updated: '2026-07-10T08:49:37.199Z'
+order: 0
 ---
 
 Follow-up from `r4zbwCW8`, which delivered the **local** half of the git rework (branch-per-ticket up front, commit-onto-branch, resume from the ticket branch) plus the design note `docs/GIT-WORKFLOW.md`. This ticket is the **remote** half (parts 3 and remote-4 of that design).
