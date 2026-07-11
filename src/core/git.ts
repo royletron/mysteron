@@ -86,6 +86,16 @@ export interface RunWorktree {
   ownsBranch: boolean;
 }
 
+/** Add a pattern to a worktree's per-worktree git exclude file (best-effort). */
+async function excludeFromWorktree(dir: string, pattern: string): Promise<void> {
+  const link = await fs.readFile(path.join(dir, ".git"), "utf8").catch(() => "");
+  const m = link.match(/^gitdir:\s*(.+)$/m);
+  if (!m) return;
+  const infoDir = path.join(m[1].trim(), "info");
+  await fs.mkdir(infoDir, { recursive: true }).catch(() => undefined);
+  await fs.appendFile(path.join(infoDir, "exclude"), `\n${pattern}\n`).catch(() => undefined);
+}
+
 /**
  * Create an isolated git worktree at `ref` for a local run, so an agent works in
  * its own checkout rather than the shared one. Mirrors the guest's throwaway
@@ -96,6 +106,7 @@ export async function addRunWorktree(root: string, ref: string, runId: string): 
   const dir = path.join(os.tmpdir(), `mysteron-run-${runId}`);
   const branch = `mysteron/_run-${runId}`;
   await exec("git", ["-C", root, "worktree", "add", "-q", "-b", branch, dir, ref], { maxBuffer: 64 << 20 });
+  await excludeFromWorktree(dir, "node_modules");
   const baseSha = (await exec("git", ["-C", dir, "rev-parse", "HEAD"])).stdout.trim();
   return { dir, branch, baseSha, ownsBranch: true };
 }
@@ -186,6 +197,7 @@ export async function addTicketWorktree(root: string, branch: string, runId: str
   if (!isValidBranchName(branch)) throw new Error(`invalid branch name: ${branch}`);
   const dir = path.join(os.tmpdir(), `mysteron-run-${runId}`);
   await exec("git", ["-C", root, "worktree", "add", "-q", dir, branch], { maxBuffer: 64 << 20 });
+  await excludeFromWorktree(dir, "node_modules");
   const baseSha = (await exec("git", ["-C", dir, "rev-parse", "HEAD"])).stdout.trim();
   return { dir, branch, baseSha, ownsBranch: false };
 }
