@@ -2,7 +2,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { nanoid } from "nanoid";
 import { discoverProjectDocs, type DiscoveredKind } from "./discover.js";
-import { buildRoster, migrateConfig, needsMigration, seedCompanionSpecs } from "./companions.js";
+import { buildRoster, migrateConfig, seedCompanionSpecs } from "./companions.js";
 import {
   ETIQUETTE_DOC,
   SPEC_DOC,
@@ -47,6 +47,8 @@ _Describe what this project is and what "done" looks like._
 `;
 }
 
+const CURRENT_SCHEMA_VERSION = 1;
+
 export async function loadProjectConfig(projectRoot: string): Promise<ProjectConfig | undefined> {
   let parsed: Record<string, unknown>;
   try {
@@ -54,14 +56,20 @@ export async function loadProjectConfig(projectRoot: string): Promise<ProjectCon
   } catch {
     return undefined;
   }
-  // Migrate pre-roster configs (single `companion`) to companions[] once, in place.
-  if (needsMigration(parsed)) {
-    const migrated = migrateConfig(parsed);
-    await saveProjectConfig(projectRoot, migrated).catch(() => undefined);
-    await seedCompanionSpecs(projectRoot, migrated).catch(() => undefined);
-    return migrated;
-  }
-  return parsed as unknown as ProjectConfig;
+  return runMigrations(projectRoot, parsed);
+}
+
+async function runMigrations(projectRoot: string, raw: Record<string, unknown>): Promise<ProjectConfig> {
+  const version = (raw.schemaVersion as number | undefined) ?? 0;
+  if (version >= CURRENT_SCHEMA_VERSION) return raw as unknown as ProjectConfig;
+  // v0 → v1: single `companion` field → `companions[]` roster
+  const migrated = migrateConfig(raw);
+  migrated.schemaVersion = CURRENT_SCHEMA_VERSION;
+  await saveProjectConfig(projectRoot, migrated).catch((err: Error) =>
+    console.error(`[mysteron] failed to save migrated config: ${err.message}`),
+  );
+  await seedCompanionSpecs(projectRoot, migrated).catch(() => undefined);
+  return migrated;
 }
 
 export async function saveProjectConfig(
@@ -177,6 +185,7 @@ export async function initProject(
 
   const recipe = opts.recipe ?? "solo";
   const config: ProjectConfig = {
+    schemaVersion: CURRENT_SCHEMA_VERSION,
     id: nanoid(8),
     name,
     recipe,

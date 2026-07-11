@@ -149,6 +149,7 @@ export interface CommitStrategy {
 }
 
 export interface ProjectConfig {
+  schemaVersion?: number;
   id: string;
   name: string;
   /** The chosen agent-team recipe (drives the companion roster). */
