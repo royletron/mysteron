@@ -100,6 +100,16 @@ export interface DreamMemoryEntry {
   createdAt: string;
 }
 
+export interface DreamRunRecord {
+  id: string;
+  startedAt: string;
+  finishedAt: string;
+  ticketsCreated: { id: string; title: string }[];
+  costUsd?: number;
+  numTurns?: number;
+  lines: string[];
+}
+
 export interface ProjectConfig {
   id: string;
   name: string;
@@ -119,7 +129,7 @@ export interface ProjectConfig {
 }
 
 export const getDreamStatus = (projectId: string) =>
-  api<{ state: DreamState; memory: { tickets: DreamMemoryEntry[] } }>(`/api/projects/${projectId}/dream`);
+  api<{ state: DreamState; memory: { tickets: DreamMemoryEntry[] }; runs: DreamRunRecord[] }>(`/api/projects/${projectId}/dream`);
 
 export type AutopilotStatus = "running" | "paused" | "idle" | "stopped";
 

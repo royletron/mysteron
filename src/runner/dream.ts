@@ -4,7 +4,8 @@ import path from "node:path";
 import { listTickets } from "../core/board.js";
 import { readDoc } from "../core/docs.js";
 import { bus } from "../core/events.js";
-import { dreamMemoryPath, dreamStatePath, DREAM_SPEC_DOC } from "../core/paths.js";
+import { nanoid } from "nanoid";
+import { dreamMemoryPath, dreamRunsPath, dreamStatePath, DREAM_SPEC_DOC } from "../core/paths.js";
 import type { DreamConfig } from "../core/types.js";
 
 export interface DreamState {
@@ -21,6 +22,60 @@ export interface DreamMemoryEntry {
 
 export interface DreamMemory {
   tickets: DreamMemoryEntry[];
+}
+
+export interface DreamRunRecord {
+  id: string;
+  startedAt: string;
+  finishedAt: string;
+  ticketsCreated: { id: string; title: string }[];
+  costUsd?: number;
+  numTurns?: number;
+  /** Rendered text lines from Claude's output during this run. */
+  lines: string[];
+}
+
+const MAX_STORED_RUNS = 20;
+
+async function readDreamRuns(projectRoot: string): Promise<DreamRunRecord[]> {
+  try {
+    const raw = JSON.parse(await fs.readFile(dreamRunsPath(projectRoot), "utf8")) as { runs: DreamRunRecord[] };
+    return raw.runs ?? [];
+  } catch {
+    return [];
+  }
+}
+
+async function appendDreamRun(projectRoot: string, record: DreamRunRecord): Promise<void> {
+  const runs = await readDreamRuns(projectRoot);
+  runs.push(record);
+  // Keep only the most recent MAX_STORED_RUNS entries.
+  const trimmed = runs.slice(-MAX_STORED_RUNS);
+  await fs.writeFile(dreamRunsPath(projectRoot), JSON.stringify({ runs: trimmed }, null, 2) + "\n", "utf8");
+}
+
+/** Extract readable text from a single Claude stream-json event line. */
+function extractLines(raw: string): string[] {
+  try {
+    const e = JSON.parse(raw) as Record<string, any>;
+    const out: string[] = [];
+    if (e?.type === "assistant") {
+      for (const b of (e.message?.content ?? []) as any[]) {
+        if (b.type === "text" && typeof b.text === "string" && b.text.trim()) out.push(b.text.trimEnd());
+        else if (b.type === "tool_use" && typeof b.name === "string") {
+          out.push(`→ ${b.name}`);
+        }
+      }
+    } else if (e?.type === "result") {
+      const parts: string[] = [];
+      if (typeof e.num_turns === "number") parts.push(`${e.num_turns} turns`);
+      if (typeof e.total_cost_usd === "number") parts.push(`$${e.total_cost_usd.toFixed(4)}`);
+      if (parts.length) out.push(`✓ done · ${parts.join(" · ")}`);
+    }
+    return out;
+  } catch {
+    return [];
+  }
 }
 
 const DEFAULT_DREAM_SPEC = `# Dream Mode
@@ -125,7 +180,13 @@ async function runDream(projectRoot: string, projectId: string, config: DreamCon
     "--disallowedTools", "Write", "Edit", "Bash", "NotebookEdit", "MultiEdit", "WebSearch", "WebFetch",
   ];
 
-  if (verbose) console.log(`[dream] starting dream run for ${path.basename(projectRoot)}`);
+  const runId = nanoid(8);
+  const startedAt = new Date().toISOString();
+  if (verbose) console.log(`[dream] starting dream run for ${path.basename(projectRoot)} (${runId})`);
+
+  const capturedLines: string[] = [];
+  let costUsd: number | undefined;
+  let numTurns: number | undefined;
 
   await new Promise<void>((resolve) => {
     const child = spawn("claude", args, {
@@ -139,7 +200,26 @@ async function runDream(projectRoot: string, projectId: string, config: DreamCon
       },
     });
 
-    child.stdout.on("data", () => undefined); // consume stdout (streaming JSON)
+    let buf = "";
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk: string) => {
+      buf += chunk;
+      let nl: number;
+      while ((nl = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, nl);
+        buf = buf.slice(nl + 1);
+        if (!line.trim()) continue;
+        capturedLines.push(...extractLines(line));
+        // Extract cost/turns from the result event.
+        try {
+          const e = JSON.parse(line) as Record<string, any>;
+          if (e?.type === "result") {
+            if (typeof e.total_cost_usd === "number") costUsd = e.total_cost_usd;
+            if (typeof e.num_turns === "number") numTurns = e.num_turns;
+          }
+        } catch { /* ignore */ }
+      }
+    });
     child.stderr.on("data", (d: Buffer) => { if (verbose) process.stderr.write(d); });
     child.on("close", () => resolve());
     child.on("error", (err) => {
@@ -148,24 +228,37 @@ async function runDream(projectRoot: string, projectId: string, config: DreamCon
     });
   });
 
+  const finishedAt = new Date().toISOString();
+
   // Detect newly created tickets and add them to memory.
   const after = await listTickets(projectRoot);
   const newTickets = after.filter((t) => !before.has(t.id));
 
   if (newTickets.length > 0) {
     memory.tickets.push(
-      ...newTickets.map((t) => ({ id: t.id, title: t.title, createdAt: new Date().toISOString() })),
+      ...newTickets.map((t) => ({ id: t.id, title: t.title, createdAt: finishedAt })),
     );
     await saveDreamMemory(projectRoot, memory);
     if (verbose) console.log(`[dream] created ${newTickets.length} ticket(s): ${newTickets.map((t) => t.title).join(", ")}`);
   }
 
   const state = await readDreamState(projectRoot);
-  await saveDreamState(projectRoot, {
-    lastRunAt: new Date().toISOString(),
-    runCount: (state.runCount || 0) + 1,
-    lastTicketsCreated: newTickets.length,
-  });
+  await Promise.all([
+    saveDreamState(projectRoot, {
+      lastRunAt: finishedAt,
+      runCount: (state.runCount || 0) + 1,
+      lastTicketsCreated: newTickets.length,
+    }),
+    appendDreamRun(projectRoot, {
+      id: runId,
+      startedAt,
+      finishedAt,
+      ticketsCreated: newTickets.map((t) => ({ id: t.id, title: t.title })),
+      costUsd,
+      numTurns,
+      lines: capturedLines,
+    }),
+  ]);
 
   bus.emitEvent({ type: "board-changed", projectId });
 }
@@ -202,5 +295,10 @@ export class DreamRunner {
   /** Read dream memory for a project. */
   memory(projectRoot: string): Promise<DreamMemory> {
     return readDreamMemory(projectRoot);
+  }
+
+  /** Read recent dream run records for a project (newest last). */
+  runs(projectRoot: string): Promise<DreamRunRecord[]> {
+    return readDreamRuns(projectRoot);
   }
 }

@@ -14,6 +14,7 @@ import {
   type CommitResult,
   type Companion,
   type DreamConfig,
+  type DreamRunRecord,
   type DreamState,
   type DreamMemoryEntry,
   type LocalServer,
@@ -580,6 +581,7 @@ function DreamModeCard({ projectId, config }: { projectId: string; config: Proje
   const enabled = config.dream?.enabled ?? false;
   const state: DreamState = data?.state ?? { runCount: 0, lastTicketsCreated: 0 };
   const memory: DreamMemoryEntry[] = data?.memory?.tickets ?? [];
+  const runs: DreamRunRecord[] = [...(data?.runs ?? [])].reverse(); // newest first
 
   return (
     <div class="card mt-4">
@@ -617,29 +619,78 @@ function DreamModeCard({ projectId, config }: { projectId: string; config: Proje
             </button>
           </div>
 
-          {state.lastRunAt && (
-            <p class="text-xs text-zinc-500">
-              Last run {fmtWhen(state.lastRunAt)} · {state.lastTicketsCreated} ticket{state.lastTicketsCreated === 1 ? "" : "s"} created · {state.runCount} run{state.runCount === 1 ? "" : "s"} total
-            </p>
-          )}
-
-          {memory.length > 0 && (
-            <details class="mt-1">
-              <summary class="cursor-pointer text-xs text-zinc-500 hover:text-zinc-300">
-                {memory.length} ticket{memory.length === 1 ? "" : "s"} created by dream mode
-              </summary>
-              <ul class="mt-1 space-y-0.5 pl-2">
-                {memory.map((t) => (
-                  <li key={t.id} class="text-xs text-zinc-400">
-                    {t.title} <span class="text-zinc-600">({t.id})</span>
-                  </li>
-                ))}
-              </ul>
-            </details>
+          {state.runCount === 0 && (
+            <p class="text-xs text-zinc-600">No runs yet — first run will happen when the schedule fires.</p>
           )}
         </div>
       )}
+
+      {runs.length > 0 && (
+        <div class="mt-4 flex flex-col gap-2">
+          <h3 class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Recent runs</h3>
+          {runs.map((run) => (
+            <DreamRunRow key={run.id} run={run} />
+          ))}
+        </div>
+      )}
+
+      {memory.length > 0 && (
+        <details class="mt-3">
+          <summary class="cursor-pointer text-xs text-zinc-500 hover:text-zinc-300">
+            All dream tickets ({memory.length})
+          </summary>
+          <ul class="mt-1 space-y-0.5 pl-2">
+            {memory.map((t) => (
+              <li key={t.id} class="text-xs text-zinc-400">
+                {t.title} <span class="text-zinc-600">({t.id})</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
     </div>
+  );
+}
+
+function DreamRunRow({ run }: { run: DreamRunRecord }) {
+  const durationMs = Date.parse(run.finishedAt) - Date.parse(run.startedAt);
+  const durationSec = Math.round(durationMs / 1000);
+  const duration = durationSec < 60 ? `${durationSec}s` : `${Math.round(durationSec / 60)}m`;
+  const meta: string[] = [`${fmtWhen(run.startedAt)}`, `${duration}`];
+  if (run.numTurns != null) meta.push(`${run.numTurns} turns`);
+  if (run.costUsd != null) meta.push(`$${run.costUsd.toFixed(4)}`);
+
+  return (
+    <details class="rounded border border-zinc-800 bg-zinc-900/40">
+      <summary class="flex cursor-pointer items-center gap-2 px-3 py-2 text-xs hover:bg-zinc-800/40">
+        <span class="text-zinc-300">{meta.join(" · ")}</span>
+        <div class="flex-1" />
+        {run.ticketsCreated.length > 0 ? (
+          <span class="pill text-emerald-400">+{run.ticketsCreated.length} ticket{run.ticketsCreated.length === 1 ? "" : "s"}</span>
+        ) : (
+          <span class="text-zinc-600">no tickets</span>
+        )}
+      </summary>
+
+      <div class="px-3 pb-3 pt-1">
+        {run.ticketsCreated.length > 0 && (
+          <ul class="mb-2 space-y-0.5">
+            {run.ticketsCreated.map((t) => (
+              <li key={t.id} class="text-xs text-emerald-400">
+                + {t.title} <span class="text-zinc-600">({t.id})</span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {run.lines.length > 0 ? (
+          <pre class="max-h-64 overflow-y-auto whitespace-pre-wrap break-words rounded bg-zinc-950 p-2 text-[11px] leading-relaxed text-zinc-300">
+            {run.lines.join("\n")}
+          </pre>
+        ) : (
+          <p class="text-xs text-zinc-600">No output captured.</p>
+        )}
+      </div>
+    </details>
   );
 }
 

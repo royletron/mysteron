@@ -64,3 +64,8 @@ export function dreamStatePath(projectRoot: string): string {
 export function dreamMemoryPath(projectRoot: string): string {
   return path.join(projectMysteronDir(projectRoot), "dream-memory.json");
 }
+
+/** Dream mode run log: array of the last N run records (output + metadata). */
+export function dreamRunsPath(projectRoot: string): string {
+  return path.join(projectMysteronDir(projectRoot), "dream-runs.json");
+}

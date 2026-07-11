@@ -580,8 +580,12 @@ export function registerApi(
   app.get("/api/projects/:id/dream", async (req: Request, res: Response) => {
     const r = await resolve(req.params.id);
     if (!r) return notFound(res);
-    const [state, memory] = await Promise.all([dream.state(r.entry.path), dream.memory(r.entry.path)]);
-    res.json({ state, memory });
+    const [state, memory, runs] = await Promise.all([
+      dream.state(r.entry.path),
+      dream.memory(r.entry.path),
+      dream.runs(r.entry.path),
+    ]);
+    res.json({ state, memory, runs });
   });
 
   // Companion role-spec docs (seeded from the recipe, editable here).
