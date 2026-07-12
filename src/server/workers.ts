@@ -35,6 +35,7 @@ export interface Worker {
 
 const MAX_OFFER_MS = 24 * 60 * 60 * 1000; // cap an offer at a day
 const STALE_MS = 60_000; // drop a worker we haven't heard from in a minute
+const RECONNECT_GRACE_MS = 60_000; // how long to wait for a mid-run worker to reconnect
 
 /**
  * Tracks guest workers that have dialled in to offer their machine + Claude
@@ -43,6 +44,9 @@ const STALE_MS = 60_000; // drop a worker we haven't heard from in a minute
  */
 export class WorkerRegistry {
   private workers = new Map<string, Worker & { socket: WebSocket; runId?: string }>();
+  // Runs whose worker disconnected mid-run; values are grace-period timers that
+  // fire onRunDone(failed) if no worker reconnects claiming the run in time.
+  private pendingRuns = new Map<string, ReturnType<typeof setTimeout>>();
 
   /** Wired by the server to feed guest output/results into the RunManager. */
   onRunLine?: (runId: string, stream: "stdout" | "stderr" | "system", text: string) => void;
@@ -142,6 +146,13 @@ export class WorkerRegistry {
           const now = new Date();
           const ttl = Math.min(Math.max(msg.expiresInMs || 0, 60_000), MAX_OFFER_MS);
           const expiresAt = new Date(now.getTime() + ttl).toISOString();
+          // If reconnecting mid-run, cancel the grace timer and re-attach the run.
+          const resumedRunId = msg.resumeRunId && this.pendingRuns.has(msg.resumeRunId) ? msg.resumeRunId : undefined;
+          if (resumedRunId) {
+            clearTimeout(this.pendingRuns.get(resumedRunId)!);
+            this.pendingRuns.delete(resumedRunId);
+            if (verbose) console.log(`[mysteron] guest reconnected mid-run: ${msg.label} (${id}), run ${resumedRunId}`);
+          }
           this.workers.set(id, {
             id,
             socket,
@@ -150,12 +161,13 @@ export class WorkerRegistry {
             connectedAt: now.toISOString(),
             lastSeen: now.toISOString(),
             expiresAt,
-            status: "idle",
+            status: resumedRunId ? "busy" : "idle",
+            runId: resumedRunId,
             version: msg.version,
             commitSha: msg.commitSha,
           });
           this.send(socket, { t: "registered", workerId: id, hostLabel: hostLabel(), expiresAt });
-          if (verbose) console.log(`[mysteron] guest joined: ${msg.label} (${id}), expires ${expiresAt}`);
+          if (verbose && !resumedRunId) console.log(`[mysteron] guest joined: ${msg.label} (${id}), expires ${expiresAt}`);
           bus.emitWorkers();
         } else if (msg.t === "heartbeat" && id) {
           const w = this.workers.get(id);
@@ -193,8 +205,16 @@ export class WorkerRegistry {
       const drop = () => {
         if (!id) return;
         const w = this.workers.get(id);
-        // If it vanished mid-run, fail that run so the ticket isn't stuck.
-        if (w?.runId) this.onRunDone?.(w.runId, { status: "failed", exitCode: null });
+        if (w?.runId) {
+          // Give the worker time to reconnect and resume rather than immediately failing.
+          const runId = w.runId;
+          const timer = setTimeout(() => {
+            this.pendingRuns.delete(runId);
+            this.onRunDone?.(runId, { status: "failed", exitCode: null });
+          }, RECONNECT_GRACE_MS);
+          timer.unref?.();
+          this.pendingRuns.set(runId, timer);
+        }
         if (this.workers.delete(id)) bus.emitWorkers();
       };
       socket.on("close", drop);
