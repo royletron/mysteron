@@ -96,6 +96,10 @@ export class GuestConnection {
   private expiresAt?: string;
   private active = 0;
   private quota?: GuestQuota;
+  // Reconnection support: track the active run and buffer messages while disconnected.
+  private activeRunId?: string;
+  private msgBuffer: string[] = [];
+  private connected = false;
 
   readonly hostUrl: string;
   readonly token: string;
@@ -140,6 +144,16 @@ export class GuestConnection {
     this.onChange?.(this.status());
   }
 
+  /** Send a message to the host, buffering it if the socket isn't ready yet. */
+  private sendToHost(msg: object): void {
+    const s = this.socket;
+    if (this.connected && s?.readyState === WebSocket.OPEN) {
+      s.send(JSON.stringify(msg));
+    } else {
+      this.msgBuffer.push(JSON.stringify(msg));
+    }
+  }
+
   start(): void {
     this.deadline = Date.now() + this.forMs;
     this.connect();
@@ -182,6 +196,7 @@ export class GuestConnection {
           expiresInMs: this.deadline - Date.now(),
           version,
           commitSha,
+          resumeRunId: this.activeRunId,
         }),
       );
       this.heartbeat = setInterval(() => {
@@ -205,6 +220,12 @@ export class GuestConnection {
         void this.reportQuota(socket);
         this.quotaTimer = setInterval(() => void this.reportQuota(socket), QUOTA_INTERVAL_MS);
         this.quotaTimer.unref?.();
+        // Mark connected and drain any messages buffered while we were disconnected.
+        this.connected = true;
+        const toSend = this.msgBuffer.splice(0);
+        for (const m of toSend) {
+          if (socket.readyState === WebSocket.OPEN) socket.send(m);
+        }
       } else if (msg.t === "rejected") {
         this.set("rejected", msg.reason);
         this.stop(`Rejected: ${msg.reason}`);
@@ -216,6 +237,7 @@ export class GuestConnection {
     });
 
     socket.on("close", () => {
+      this.connected = false;
       if (this.heartbeat) clearInterval(this.heartbeat);
       if (this.quotaTimer) clearInterval(this.quotaTimer);
       if (this.stopped) return;
@@ -243,16 +265,19 @@ export class GuestConnection {
 
   private async runDispatch(socket: WebSocket, msg: DispatchMsg): Promise<void> {
     this.active++;
+    this.activeRunId = msg.runId;
     this.onChange?.(this.status());
     this.onRunStart?.({ runId: msg.runId, ticketId: msg.ticketId, ticketTitle: msg.ticketTitle });
     try {
-      const result = await handleDispatch(socket, msg, this.hostUrl, this.token, {
+      const result = await handleDispatch((m) => this.sendToHost(m), msg, this.hostUrl, this.token, {
         line: (stream, text) => this.onRunLine?.({ runId: msg.runId, stream, text }),
         stats: (costUsd, numTurns) => this.onRunStats?.({ runId: msg.runId, costUsd, numTurns }),
       });
       this.onRunDone?.({ runId: msg.runId, ...result });
     } finally {
       this.active = Math.max(0, this.active - 1);
+      this.activeRunId = undefined;
+      this.msgBuffer = [];
       this.onChange?.(this.status());
     }
   }
@@ -426,14 +451,14 @@ interface DispatchObserver {
 }
 
 async function handleDispatch(
-  socket: WebSocket,
+  sendFn: (msg: object) => void,
   msg: DispatchMsg,
   hostUrl: string,
   token: string,
   observer?: DispatchObserver,
 ): Promise<{ status: "done" | "failed"; costUsd?: number; numTurns?: number }> {
   const line: LineFn = (stream, text) => {
-    socket.send(JSON.stringify({ t: "run-line", runId: msg.runId, stream, text }));
+    sendFn({ t: "run-line", runId: msg.runId, stream, text });
     observer?.line?.(stream, text);
   };
   const workdir = path.join(os.tmpdir(), `mysteron-guest-${msg.runId}`);
@@ -525,7 +550,7 @@ async function handleDispatch(
     status = "failed";
   } finally {
     await fs.rm(workdir, { recursive: true, force: true }).catch(() => undefined);
-    socket.send(JSON.stringify({ t: "run-done", runId: msg.runId, status, exitCode, patchBase64, commitMessage, costUsd, numTurns, pushed: pushed || undefined }));
+    sendFn({ t: "run-done", runId: msg.runId, status, exitCode, patchBase64, commitMessage, costUsd, numTurns, pushed: pushed || undefined });
   }
   return { status, costUsd, numTurns };
 }
