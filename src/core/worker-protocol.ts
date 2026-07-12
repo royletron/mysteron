@@ -21,6 +21,8 @@ export interface RegisterMsg {
   version?: string;
   /** Short git sha of the guest's Mysteron checkout (absent for a packed install). */
   commitSha?: string;
+  /** Run the guest is still executing after a disconnect — host should not fail it. */
+  resumeRunId?: string;
 }
 
 export interface HeartbeatMsg {
