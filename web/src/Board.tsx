@@ -13,7 +13,7 @@ import { navigate, useNow } from "./hooks";
 import { pushToast } from "./Toast";
 import { Avatar } from "./Avatar";
 import { LiveDot, CloudGlyph, SubtaskBadge } from "./ui";
-import { Loader2, MoreHorizontal, Lock } from "lucide-preact";
+import { Loader2, MoreHorizontal, Lock, GitMerge } from "lucide-preact";
 
 export function Board({
   detail,
@@ -294,13 +294,28 @@ function TicketCard({
         {(() => {
           const pending = (t.dependencies ?? []).filter((d) => !d.satisfied);
           if (!t.blocked || pending.length === 0) return null;
+          // Split into "done but branch not merged" vs "still in progress"
+          const needsMerge = pending.filter((d) => d.state === "done");
+          const notDone = pending.filter((d) => d.state !== "done");
           return (
-            <span
-              class="tag inline-flex items-center gap-1 text-amber-400"
-              title={`Blocked by: ${pending.map((d) => d.title).join(", ")}`}
-            >
-              <Lock size={11} /> Blocked by {pending.length}
-            </span>
+            <>
+              {needsMerge.length > 0 && (
+                <span
+                  class="tag inline-flex items-center gap-1 text-violet-400"
+                  title={`Merge needed: ${needsMerge.map((d) => d.title).join(", ")}`}
+                >
+                  <GitMerge size={11} /> Merge needed
+                </span>
+              )}
+              {notDone.length > 0 && (
+                <span
+                  class="tag inline-flex items-center gap-1 text-amber-400"
+                  title={`Blocked by: ${notDone.map((d) => d.title).join(", ")}`}
+                >
+                  <Lock size={11} /> Blocked by {notDone.length}
+                </span>
+              )}
+            </>
           );
         })()}
         {guestLabel && (

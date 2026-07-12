@@ -14,7 +14,7 @@ import {
 } from "./api";
 import { useAsync } from "./hooks";
 import { LiveDot, RunTimer, RunMachine, SubtaskList } from "./ui";
-import { Lock } from "lucide-preact";
+import { Lock, GitMerge } from "lucide-preact";
 import type { AppEvent } from "./App";
 
 function agentViewUrl(projectId: string, ticketId: string, run = false, runId?: string): string {
@@ -275,17 +275,25 @@ function Dependencies({
         <div class="mb-2 flex flex-col gap-1">
           {blockedBy.map((id) => {
             const dep = byId.get(id);
-            const satisfied = dep?.state === "done";
+            // Use the resolved DependencyLink when available (board enriches these with
+            // unmerged-branch awareness); fall back to raw state for new/unsaved tickets.
+            const link = ticket?.dependencies?.find((d) => d.id === id);
+            const satisfied = link ? link.satisfied : dep?.state === "done";
+            const needsMerge = !satisfied && dep?.state === "done";
             return (
               <div
                 key={id}
                 class="flex items-center gap-2 rounded-sm border border-zinc-800 bg-zinc-900/60 px-2.5 py-1 text-xs"
               >
-                <span class={satisfied ? "text-emerald-400" : "text-amber-400"} title={satisfied ? "Landed" : "Not yet in main"}>
-                  {satisfied ? "✓" : "⏳"}
-                </span>
+                {satisfied ? (
+                  <span class="text-emerald-400" title="Landed in main">✓</span>
+                ) : needsMerge ? (
+                  <span class="text-violet-400" title="Done — merge the branch to unblock"><GitMerge size={12} /></span>
+                ) : (
+                  <span class="text-amber-400" title="Not yet done">⏳</span>
+                )}
                 <span class="flex-1 truncate">{dep ? dep.title : id}</span>
-                {dep && <span class="text-zinc-500">{STATE_LABELS[dep.state]}</span>}
+                {dep && <span class={`${needsMerge ? "text-violet-400" : "text-zinc-500"}`}>{needsMerge ? "merge needed" : STATE_LABELS[dep.state]}</span>}
                 <button class="text-zinc-500 hover:text-red-400" title="Remove dependency" onClick={() => remove(id)}>
                   ✕
                 </button>
