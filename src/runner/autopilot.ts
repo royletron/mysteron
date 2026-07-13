@@ -168,7 +168,7 @@ export class Autopilot {
 
       // Plan one tick of work across idle guests + free local companions, then
       // start each through its executor — one uniform dispatch path.
-      const idleWorkers = this.workers.idle().map((w) => ({ id: w.id, label: w.label }));
+      const idleWorkers = this.workers.idle().filter((w) => !w.quota || w.quota.safeToContinue).map((w) => ({ id: w.id, label: w.label }));
       const plan = planAssignments({
         queued: queue.eligible(),
         config,

@@ -735,7 +735,7 @@ export function registerApi(
       // to run, falling back to the existing budget/availability rules.
       const companion = getCompanion(r.config, ticket.companionId) ?? defaultCompanion(r.config);
       const allowsLocal = companionAllowsLocal(companion);
-      const idleAllowedGuest = () => workers.idle().find((w) => companionAllowsGuest(companion, w.label));
+      const idleAllowedGuest = () => workers.idle().find((w) => companionAllowsGuest(companion, w.label) && (!w.quota || w.quota.safeToContinue));
 
       // A local run can't happen if the host's Claude usage is maxed out (it
       // would just fail against the rate limit) or if no agent program is even
