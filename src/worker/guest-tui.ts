@@ -34,6 +34,8 @@ export interface GuestView {
   totals: { done: number; failed: number; stopped: number; costUsd: number; turns: number };
   /** This guest's current Claude allowance, captured like the host captures its own. */
   quota?: GuestQuota;
+  reconnectAttempt?: number;
+  reconnectInMs?: number;
 }
 
 export interface RenderOpts {
@@ -88,7 +90,7 @@ export function formatDuration(ms: number): string {
   return `${sec}s`;
 }
 
-function badge(state: GuestStatus["state"], p: ReturnType<typeof palette>, spin: string): string {
+function badge(state: GuestStatus["state"], p: ReturnType<typeof palette>, spin: string, v?: { reconnectAttempt?: number; reconnectInMs?: number }): string {
   switch (state) {
     case "connecting":
       return p.yellow(`${spin} connecting`);
@@ -96,6 +98,11 @@ function badge(state: GuestStatus["state"], p: ReturnType<typeof palette>, spin:
       return p.green("● offered");
     case "rejected":
       return p.red("✖ rejected");
+    case "reconnecting": {
+      const attempt = v?.reconnectAttempt ?? 1;
+      const secs = v?.reconnectInMs != null ? ` next in ${Math.round(v.reconnectInMs / 1000)}s` : "";
+      return p.yellow(`${spin} reconnecting (attempt ${attempt}${secs})`);
+    }
     case "stopped":
       return p.gray("■ stopped");
   }
@@ -121,7 +128,7 @@ export function renderFrame(v: GuestView, opts: RenderOpts): string {
   out.push(rule);
 
   const host = v.hostLabel ? `${v.hostLabel} ${p.dim(`(${v.hostUrl})`)}` : v.hostUrl;
-  out.push(`${p.gray("host ")}  ${host}   ${badge(v.state, p, spin)}`);
+  out.push(`${p.gray("host ")}  ${host}   ${badge(v.state, p, spin, v)}`);
 
   if (v.expiresAt) {
     const remaining = formatDuration(v.expiresAt - v.now);
@@ -261,6 +268,8 @@ export class GuestTui {
       runs: [...this.runs.values()],
       totals: this.totals,
       quota: s?.quota,
+      reconnectAttempt: s?.reconnectAttempt,
+      reconnectInMs: s?.reconnectInMs,
     };
   }
 

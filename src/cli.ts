@@ -174,6 +174,7 @@ async function main(): Promise<void> {
         label: typeof flags.name === "string" ? flags.name : undefined,
         forMs: typeof flags.for === "string" ? parseDuration(flags.for) : undefined,
         capacity: typeof flags.capacity === "string" ? Number(flags.capacity) : undefined,
+        reconnect: flags["no-reconnect"] ? false : undefined,
       });
       break;
     }

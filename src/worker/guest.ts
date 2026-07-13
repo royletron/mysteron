@@ -24,11 +24,13 @@ export interface GuestOptions {
   /** Offer duration in ms (default 2h). */
   forMs?: number;
   capacity?: number;
+  /** Set false to exit on disconnect instead of retrying (default true). */
+  reconnect?: boolean;
 }
 
 export interface GuestStatus {
   offering: boolean;
-  state: "connecting" | "offered" | "rejected" | "stopped";
+  state: "connecting" | "offered" | "rejected" | "reconnecting" | "stopped";
   hostUrl: string;
   label: string;
   hostLabel?: string;
@@ -37,6 +39,9 @@ export interface GuestStatus {
   activeRuns: number;
   /** This guest's current Claude allowance, captured like the host captures its own. */
   quota?: GuestQuota;
+  /** Set while retrying after a disconnect. */
+  reconnectAttempt?: number;
+  reconnectInMs?: number;
 }
 
 /** A dispatched run starting on this guest. */
@@ -100,12 +105,15 @@ export class GuestConnection {
   private activeRunId?: string;
   private msgBuffer: string[] = [];
   private connected = false;
+  private reconnectAttempt = 0;
+  private reconnectInMs?: number;
 
   readonly hostUrl: string;
   readonly token: string;
   readonly label: string;
   readonly forMs: number;
   readonly capacity: number;
+  readonly reconnect: boolean;
 
   /** Called whenever the status changes (for live UI / logging). */
   onChange?: (status: GuestStatus) => void;
@@ -122,6 +130,7 @@ export class GuestConnection {
     this.label = opts.label || os.hostname();
     this.forMs = opts.forMs ?? 2 * 60 * 60 * 1000;
     this.capacity = Math.max(1, opts.capacity ?? 1);
+    this.reconnect = opts.reconnect !== false;
   }
 
   status(): GuestStatus {
@@ -135,6 +144,8 @@ export class GuestConnection {
       message: this.message,
       activeRuns: this.active,
       quota: this.quota,
+      reconnectAttempt: this.reconnectAttempt > 0 ? this.reconnectAttempt : undefined,
+      reconnectInMs: this.reconnectInMs,
     };
   }
 
@@ -214,6 +225,7 @@ export class GuestConnection {
       if (msg.t === "registered") {
         this.hostLabel = msg.hostLabel;
         this.expiresAt = msg.expiresAt;
+        this.reconnectAttempt = 0;
         this.set("offered", `Offered to host "${msg.hostLabel}" until ${new Date(msg.expiresAt).toLocaleString()}.`);
         // Report our Claude allowance now and on a timer, so the host can see if
         // this guest is also maxed out before handing it work.
@@ -241,12 +253,22 @@ export class GuestConnection {
       if (this.heartbeat) clearInterval(this.heartbeat);
       if (this.quotaTimer) clearInterval(this.quotaTimer);
       if (this.stopped) return;
-      if (this.deadline - Date.now() > 0) {
-        this.set("connecting", "Disconnected — retrying in 3s…");
-        setTimeout(() => this.connect(), 3000);
-      } else {
-        this.stop("Offer window elapsed.");
-      }
+      if (!this.reconnect) return this.stop("Disconnected.");
+      if (this.deadline - Date.now() <= 0) return this.stop("Offer window elapsed.");
+      this.reconnectAttempt++;
+      // Exponential backoff: 2s → 4s → 8s → 16s → 30s cap, ±20% jitter.
+      const base = Math.min(2000 * Math.pow(2, this.reconnectAttempt - 1), 30_000);
+      const jitter = base * 0.2 * (Math.random() * 2 - 1);
+      const delay = Math.round(base + jitter);
+      this.reconnectInMs = delay;
+      const secs = Math.round(delay / 1000);
+      this.state = "reconnecting";
+      this.message = `Disconnected — attempt ${this.reconnectAttempt}, retrying in ${secs}s…`;
+      this.onChange?.(this.status());
+      setTimeout(() => {
+        this.reconnectInMs = undefined;
+        this.connect();
+      }, delay);
     });
 
     socket.on("error", () => {
