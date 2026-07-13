@@ -41,7 +41,7 @@ function settingsPath(): string {
 export async function loadSettings(): Promise<AppSettings> {
   try {
     const parsed = JSON.parse(await fs.readFile(settingsPath(), "utf8")) as Partial<AppSettings>;
-    return { auth: { enabled: false, ...(parsed.auth ?? {}) }, guest: parsed.guest ?? {} };
+    return { ...parsed, auth: { enabled: false, ...(parsed.auth ?? {}) }, guest: parsed.guest ?? {} };
   } catch {
     return { auth: { enabled: false }, guest: {} };
   }
