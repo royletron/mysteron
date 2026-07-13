@@ -1,4 +1,4 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import {
@@ -22,6 +22,7 @@ import { RECIPES, findRecipe } from "../core/recipes.js";
 import { ETIQUETTE_DOC, SPEC_DOC } from "../core/paths.js";
 import { loadProjectConfig } from "../core/project.js";
 import { resolvePlugins } from "../plugins/manager.js";
+import { bus } from "../core/events.js";
 import type { ProjectConfig } from "../core/types.js";
 
 function json(data: unknown) {
@@ -30,6 +31,22 @@ function json(data: unknown) {
 
 function text(s: string) {
   return { content: [{ type: "text" as const, text: s }] };
+}
+
+function textResource(uri: string, mimeType: string, content: string) {
+  return { contents: [{ uri, mimeType, text: content }] };
+}
+
+function ticketToMarkdown(t: Awaited<ReturnType<typeof getTicket>>): string {
+  if (!t) return "(not found)";
+  const lines = [
+    `# ${t.title}`,
+    `**ID:** ${t.id}  **State:** ${t.state}  **Priority:** ${t.priority}`,
+  ];
+  if (t.labels?.length) lines.push(`**Labels:** ${t.labels.join(", ")}`);
+  if (t.assignee) lines.push(`**Assignee:** ${t.assignee}`);
+  if (t.body) lines.push("", t.body);
+  return lines.join("\n");
 }
 
 /** Build an MCP server scoped to a single project. `callerCompanionId` identifies
@@ -292,6 +309,70 @@ export async function buildMcpServer(
       return r ? json(r) : text(`Recipe not found: ${id}`);
     },
   );
+
+  // --- Resources (read-only, URI-addressable) --------------------------------
+
+  // mysteron://board — full ticket list as JSON
+  server.registerResource(
+    "board",
+    "mysteron://board",
+    { description: "All tickets on the board as JSON.", mimeType: "application/json" },
+    async (uri) => textResource(uri.href, "application/json", JSON.stringify(await listTickets(projectRoot), null, 2)),
+  );
+
+  // mysteron://spec — SPEC.md shorthand
+  server.registerResource(
+    "spec",
+    "mysteron://spec",
+    { description: "The project's SPEC.md.", mimeType: "text/markdown" },
+    async (uri) => textResource(uri.href, "text/markdown", (await readDoc(projectRoot, SPEC_DOC)) ?? "(no SPEC.md yet)"),
+  );
+
+  // mysteron://ticket/{id} — single ticket as markdown
+  server.registerResource(
+    "ticket",
+    new ResourceTemplate("mysteron://ticket/{id}", { list: undefined }),
+    { description: "A single ticket rendered as markdown.", mimeType: "text/markdown" },
+    async (uri, { id }) => {
+      const t = await getTicket(projectRoot, id as string);
+      return textResource(uri.href, "text/markdown", ticketToMarkdown(t));
+    },
+  );
+
+  // mysteron://docs/{name} — shared doc file
+  server.registerResource(
+    "docs",
+    new ResourceTemplate("mysteron://docs/{name}", {
+      list: async () => ({
+        resources: (await listDocs(projectRoot)).map((n) => ({ uri: `mysteron://docs/${n.name}`, name: n.name })),
+      }),
+    }),
+    { description: "A shared doc file by name (e.g. SPEC.md).", mimeType: "text/markdown" },
+    async (uri, { name }) => {
+      const content = await readDoc(projectRoot, name as string);
+      return textResource(uri.href, "text/markdown", content ?? `(doc not found: ${name})`);
+    },
+  );
+
+  // mysteron://memory/{name} — memory file
+  server.registerResource(
+    "memory",
+    new ResourceTemplate("mysteron://memory/{name}", {
+      list: async () => ({
+        resources: (await listMemories(projectRoot)).map((n) => ({ uri: `mysteron://memory/${n.name}`, name: n.name })),
+      }),
+    }),
+    { description: "A project memory file by name.", mimeType: "text/markdown" },
+    async (uri, { name }) => {
+      const content = await readMemory(projectRoot, name as string);
+      return textResource(uri.href, "text/markdown", content ?? `(memory not found: ${name})`);
+    },
+  );
+
+  // Notify clients when board state changes so subscribers get push updates.
+  bus.on("mysteron", (evt: { type: string }) => {
+    if (evt.type === "board-changed") server.sendResourceListChanged();
+  });
 
   // --- Plugin-contributed tools --------------------------------------------
   const ctx = { projectRoot, config };
