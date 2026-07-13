@@ -69,13 +69,16 @@ test("guest token: mint → verify → clear", async () => {
 
 test("local servers survive a reload and unrelated saves", async () => {
   let s = await loadSettings();
-  s.localServers = [{ id: "srv1", label: "LM Studio", url: "http://localhost:1234" }];
+  s.localServers = [
+    { id: "srv1", label: "LM Studio", url: "http://localhost:1234", authToken: "sk-unsloth-abc123" },
+  ];
   await saveSettings(s);
 
   // A fresh load must not drop the config.
   s = await loadSettings();
   assert.equal(s.localServers?.length, 1);
   assert.equal(s.localServers?.[0].url, "http://localhost:1234");
+  assert.equal(s.localServers?.[0].authToken, "sk-unsloth-abc123", "auth token round-trips");
 
   // Saving an unrelated setting (e.g. a guest token) must not clobber it either.
   await mintGuestToken();

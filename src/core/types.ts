@@ -92,6 +92,13 @@ export interface LocalServer {
    * header). Many local servers ignore auth, so this is optional.
    */
   apiKey?: string;
+  /**
+   * Optional auth token, passed to runs as ANTHROPIC_AUTH_TOKEN (the
+   * Authorization: Bearer header). This is the real Unsloth API key
+   * (`sk-unsloth-…` from Unsloth Studio → Settings → API), distinct from the
+   * x-api-key above. Optional — servers with no auth can omit it.
+   */
+  authToken?: string;
 }
 
 /**

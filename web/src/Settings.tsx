@@ -284,6 +284,7 @@ function LocalAiServers() {
   const [label, setLabel] = useState("");
   const [url, setUrl] = useState("");
   const [apiKey, setApiKey] = useState("");
+  const [authToken, setAuthToken] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -292,10 +293,16 @@ function LocalAiServers() {
     setErr("");
     setBusy(true);
     try {
-      await addLocalServer({ label: label.trim(), url: url.trim(), apiKey: apiKey.trim() || undefined });
+      await addLocalServer({
+        label: label.trim(),
+        url: url.trim(),
+        apiKey: apiKey.trim() || undefined,
+        authToken: authToken.trim() || undefined,
+      });
       setLabel("");
       setUrl("");
       setApiKey("");
+      setAuthToken("");
       setNonce((n) => n + 1);
     } catch (e) {
       setErr((e as Error).message);
@@ -327,6 +334,7 @@ function LocalAiServers() {
               <span class="font-medium">{s.label}</span>
               <span class="text-xs text-zinc-500">{s.url}</span>
               {s.apiKey && <span class="text-xs text-zinc-500" title="API key set">🔑</span>}
+              {s.authToken && <span class="text-xs text-zinc-500" title="Auth token set">🎫</span>}
               <div class="flex-1" />
               <button class="btn btn-danger btn-sm" onClick={() => remove(s)}>
                 Remove
@@ -361,6 +369,14 @@ function LocalAiServers() {
           placeholder="API key (optional — passed as ANTHROPIC_API_KEY)"
           value={apiKey}
           onInput={(e) => setApiKey((e.target as HTMLInputElement).value)}
+          onKeyDown={(e) => e.key === "Enter" && add()}
+        />
+        <input
+          class="input"
+          type="password"
+          placeholder="Auth token (optional — Unsloth sk-unsloth-… key, passed as ANTHROPIC_AUTH_TOKEN)"
+          value={authToken}
+          onInput={(e) => setAuthToken((e.target as HTMLInputElement).value)}
           onKeyDown={(e) => e.key === "Enter" && add()}
         />
         {err && <p class="text-sm text-red-400">{err}</p>}

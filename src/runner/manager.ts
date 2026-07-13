@@ -734,6 +734,8 @@ export class RunManager {
               // ANTHROPIC_API_KEY. When the server needs no auth, an empty string
               // still stops Claude Code prompting for a cloud key.
               ANTHROPIC_API_KEY: localServer?.apiKey ?? "",
+              // The real Unsloth key (sk-unsloth-…) travels as the bearer token.
+              ...(localServer?.authToken ? { ANTHROPIC_AUTH_TOKEN: localServer.authToken } : {}),
             }
           : process.env.MYSTERON_RATELIMIT_PROXY_URL
           ? { ANTHROPIC_BASE_URL: process.env.MYSTERON_RATELIMIT_PROXY_URL }

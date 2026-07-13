@@ -302,25 +302,37 @@ export function registerApi(
   });
 
   app.post("/api/local-servers", async (req: Request, res: Response) => {
-    const { label, url, apiKey } = (req.body ?? {}) as { label?: string; url?: string; apiKey?: string };
+    const { label, url, apiKey, authToken } = (req.body ?? {}) as {
+      label?: string;
+      url?: string;
+      apiKey?: string;
+      authToken?: string;
+    };
     if (!label?.trim() || !url?.trim()) return res.status(400).json({ error: "label and url are required" });
     const s = await loadSettings();
     const server: LocalServer = { id: randomUUID(), label: label.trim(), url: url.trim() };
     if (apiKey?.trim()) server.apiKey = apiKey.trim();
+    if (authToken?.trim()) server.authToken = authToken.trim();
     s.localServers = [...(s.localServers ?? []), server];
     await saveSettings(s);
     res.json({ server });
   });
 
   app.patch("/api/local-servers/:serverId", async (req: Request, res: Response) => {
-    const { label, url, apiKey } = (req.body ?? {}) as { label?: string; url?: string; apiKey?: string };
+    const { label, url, apiKey, authToken } = (req.body ?? {}) as {
+      label?: string;
+      url?: string;
+      apiKey?: string;
+      authToken?: string;
+    };
     const s = await loadSettings();
     const server = (s.localServers ?? []).find((srv) => srv.id === req.params.serverId);
     if (!server) return res.status(404).json({ error: "server not found" });
     if (typeof label === "string" && label.trim()) server.label = label.trim();
     if (typeof url === "string" && url.trim()) server.url = url.trim();
-    // An empty apiKey clears it (server needs no auth); undefined leaves it as-is.
+    // An empty string clears the credential (server needs no auth); undefined leaves it as-is.
     if (typeof apiKey === "string") server.apiKey = apiKey.trim() || undefined;
+    if (typeof authToken === "string") server.authToken = authToken.trim() || undefined;
     await saveSettings(s);
     res.json({ server });
   });

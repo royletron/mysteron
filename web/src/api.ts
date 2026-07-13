@@ -61,6 +61,8 @@ export interface LocalServer {
   url: string;
   /** Optional API key, passed to runs as ANTHROPIC_API_KEY (Unsloth-style auth). */
   apiKey?: string;
+  /** Optional Unsloth auth token, passed to runs as ANTHROPIC_AUTH_TOKEN (bearer). */
+  authToken?: string;
 }
 
 export interface Companion {
@@ -472,9 +474,12 @@ export const getHostBoard = () => api<{ projects: HostBoardProject[] }>("/api/gu
 
 // ---- Local AI servers ---------------------------------------------------
 export const getLocalServers = () => api<{ servers: LocalServer[] }>("/api/local-servers");
-export const addLocalServer = (body: { label: string; url: string; apiKey?: string }) =>
+export const addLocalServer = (body: { label: string; url: string; apiKey?: string; authToken?: string }) =>
   api<{ server: LocalServer }>("/api/local-servers", { method: "POST", body: JSON.stringify(body) });
-export const updateLocalServer = (id: string, body: { label?: string; url?: string; apiKey?: string }) =>
+export const updateLocalServer = (
+  id: string,
+  body: { label?: string; url?: string; apiKey?: string; authToken?: string },
+) =>
   api<{ server: LocalServer }>(`/api/local-servers/${id}`, { method: "PATCH", body: JSON.stringify(body) });
 export const removeLocalServer = (id: string) =>
   api<{ ok: boolean }>(`/api/local-servers/${id}`, { method: "DELETE" });
