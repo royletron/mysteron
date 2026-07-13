@@ -86,6 +86,12 @@ export interface LocalServer {
   label: string;
   /** Base URL the server listens on, e.g. "http://localhost:1234". */
   url: string;
+  /**
+   * Optional API key the server expects. Following the Unsloth docs, this is
+   * passed to runs as ANTHROPIC_API_KEY (the Anthropic-compatible x-api-key
+   * header). Many local servers ignore auth, so this is optional.
+   */
+  apiKey?: string;
 }
 
 /**

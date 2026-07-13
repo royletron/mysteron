@@ -283,6 +283,7 @@ function LocalAiServers() {
   const servers = useAsync(() => getLocalServers(), [nonce]);
   const [label, setLabel] = useState("");
   const [url, setUrl] = useState("");
+  const [apiKey, setApiKey] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -291,9 +292,10 @@ function LocalAiServers() {
     setErr("");
     setBusy(true);
     try {
-      await addLocalServer({ label: label.trim(), url: url.trim() });
+      await addLocalServer({ label: label.trim(), url: url.trim(), apiKey: apiKey.trim() || undefined });
       setLabel("");
       setUrl("");
+      setApiKey("");
       setNonce((n) => n + 1);
     } catch (e) {
       setErr((e as Error).message);
@@ -324,6 +326,7 @@ function LocalAiServers() {
             <div key={s.id} class="flex items-center gap-2 rounded-sm border border-zinc-800 px-2.5 py-1.5 text-sm">
               <span class="font-medium">{s.label}</span>
               <span class="text-xs text-zinc-500">{s.url}</span>
+              {s.apiKey && <span class="text-xs text-zinc-500" title="API key set">🔑</span>}
               <div class="flex-1" />
               <button class="btn btn-danger btn-sm" onClick={() => remove(s)}>
                 Remove
@@ -352,6 +355,14 @@ function LocalAiServers() {
             Add
           </button>
         </div>
+        <input
+          class="input"
+          type="password"
+          placeholder="API key (optional — passed as ANTHROPIC_API_KEY)"
+          value={apiKey}
+          onInput={(e) => setApiKey((e.target as HTMLInputElement).value)}
+          onKeyDown={(e) => e.key === "Enter" && add()}
+        />
         {err && <p class="text-sm text-red-400">{err}</p>}
       </div>
     </div>
