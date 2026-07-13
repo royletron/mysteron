@@ -6,7 +6,8 @@ labels:
   - tech-debt
   - testing
 created: '2026-06-25T19:06:08.357Z'
-updated: '2026-06-25T19:06:08.357Z'
+updated: '2026-07-09T23:28:37.722Z'
+order: 7
 ---
 
 **Gap.** Core domain logic is well covered (80 tests across board/git/runner/usage/etc.), but the biggest surfaces have **no tests**:

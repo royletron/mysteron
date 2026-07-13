@@ -6,7 +6,8 @@ labels:
   - feature
   - spec-gap
 created: '2026-06-25T19:06:01.125Z'
-updated: '2026-06-25T19:06:01.125Z'
+updated: '2026-07-09T23:28:37.664Z'
+order: 1
 ---
 
 **Spec promise, not yet delivered.** SPEC: *"Changes to docs should be monitored so that we can pull new tickets from it if changes anything."* Also a roadmap bullet.

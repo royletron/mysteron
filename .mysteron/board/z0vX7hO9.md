@@ -1,11 +1,14 @@
 ---
 title: Schema versioning for .mysteron/config.json
-state: backlog
+state: review
 priority: low
+companionId: c1bf55fe-3e93-410d-94a7-cfde4dc1f80e
+assignee: Waldorf the Compiler
 labels:
   - tech-debt
 created: '2026-06-25T19:06:18.186Z'
-updated: '2026-06-25T19:06:18.186Z'
+updated: '2026-07-11T22:07:15.586Z'
+order: 0
 ---
 
 **Gap.** Config has exactly one anonymous migration (pre-roster `companion` → `companions[]`, `src/core/companions.ts`) detected by shape-sniffing in `src/core/project.ts`, and the migrated config is saved with `.catch(() => undefined)` — a failed save is swallowed silently. There's no `schemaVersion` field, so future breaking changes will keep stacking fragile shape-sniffs, and an older client reading a newer config has no signal.

@@ -12,7 +12,10 @@
       "id": "c1bf55fe-3e93-410d-94a7-cfde4dc1f80e",
       "name": "Waldorf the Compiler",
       "role": "soloist",
-      "avatarSeed": "Waldorf the Compiler"
+      "avatarSeed": "Waldorf the Compiler",
+      "runsOn": [
+        "Darrens-MacBook-Pro.local"
+      ]
     },
     {
       "id": "82be1826-9999-453f-bbfc-999f8dc4a2dc",
@@ -31,5 +34,10 @@
   },
   "commit": {
     "mode": "main"
-  }
+  },
+  "dream": {
+    "enabled": true,
+    "scheduleHours": 24
+  },
+  "schemaVersion": 1
 }

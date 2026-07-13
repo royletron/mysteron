@@ -1,0 +1,29 @@
+{
+  "tickets": [
+    {
+      "id": "M3UCOezD",
+      "title": "Webhook notifications for board events",
+      "createdAt": "2026-07-12T18:16:56.126Z"
+    },
+    {
+      "id": "OXCjaoLM",
+      "title": "Board search and filter",
+      "createdAt": "2026-07-12T18:16:56.126Z"
+    },
+    {
+      "id": "Sb2OIaQ0",
+      "title": "Run log rotation and auto-pruning",
+      "createdAt": "2026-07-12T18:16:56.126Z"
+    },
+    {
+      "id": "9E8j0wT6",
+      "title": "Guest worker auto-reconnect with backoff",
+      "createdAt": "2026-07-12T18:16:56.126Z"
+    },
+    {
+      "id": "UquB4p1P",
+      "title": "MCP resources: expose board state as readable resources",
+      "createdAt": "2026-07-12T18:16:56.126Z"
+    }
+  ]
+}
