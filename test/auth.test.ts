@@ -9,6 +9,7 @@ process.env.MYSTERON_HOME = path.join(tmp, "home");
 
 const {
   loadSettings,
+  saveSettings,
   setPassword,
   setAuthEnabled,
   verifyPassword,
@@ -64,6 +65,22 @@ test("guest token: mint → verify → clear", async () => {
   await clearGuestToken();
   s = await loadSettings();
   assert.equal(verifyGuestToken(s, token), false);
+});
+
+test("local servers survive a reload and unrelated saves", async () => {
+  let s = await loadSettings();
+  s.localServers = [{ id: "srv1", label: "LM Studio", url: "http://localhost:1234" }];
+  await saveSettings(s);
+
+  // A fresh load must not drop the config.
+  s = await loadSettings();
+  assert.equal(s.localServers?.length, 1);
+  assert.equal(s.localServers?.[0].url, "http://localhost:1234");
+
+  // Saving an unrelated setting (e.g. a guest token) must not clobber it either.
+  await mintGuestToken();
+  s = await loadSettings();
+  assert.equal(s.localServers?.length, 1, "localServers preserved across other saves");
 });
 
 test("parseDuration handles units and defaults to minutes", async () => {
