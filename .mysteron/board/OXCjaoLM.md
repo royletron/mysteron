@@ -1,13 +1,16 @@
 ---
 title: Board search and filter
-state: backlog
+state: ready
 priority: medium
+assignee: Waldorf the Compiler
 labels:
   - dream
   - feature
   - ui
+  - stuck
 created: '2026-07-12T18:16:08.288Z'
-updated: '2026-07-12T18:16:08.288Z'
+updated: '2026-07-14T16:27:28.126Z'
+order: 0
 ---
 
 **Gap.** The board has no search or filter. As tickets accumulate (bin grows quickly, backlog fills up), finding a specific ticket means scrolling across all columns. The MCP tools support structured queries but the web UI is all-or-nothing.
@@ -26,3 +29,6 @@ updated: '2026-07-12T18:16:08.288Z'
 - The filter state should survive tab switches (Board → Commits → back to Board).
 
 **Acceptance.** Typing in the search box narrows visible tickets across all columns in real time. Selecting a label filter shows only matching tickets. Filtered URLs are bookmarkable and reload to the same filtered state.
+
+> ⚠ **Stuck — parked by autopilot** (2026-07-13T20:31:10.759Z)
+> Gave up after 2 non-retryable attempt(s): agent failed. A human should take a look.

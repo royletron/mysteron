@@ -56,6 +56,18 @@
         "Created 5 new backlog tickets:\n\n| ID | Title | Priority | Labels |\n|---|---|---|---|\n| `M3UCOezD` | Webhook notifications for board events | medium | dream, feature, notifications |\n| `OXCjaoLM` | Board search and filter | medium | dream, feature, ui |\n| `Sb2OIaQ0` | Run log rotation and auto-pruning | medium | dream, tech-debt, storage |\n| `9E8j0wT6` | Guest worker auto-reconnect with backoff | medium | dream, reliability, guest |\n| `UquB4p1P` | MCP resources: expose board state as readable resources | medium | dream, feature, mcp |\n\n**Reasoning behind each:**\n- **Webhooks** — the \"work while you sleep\" pitch needs an out-of-band signal when things finish or get stuck; currently there's no external notification path at all\n- **Board search** — `.mysteron/runs/` already has 100+ files and tickets accumulate in bin fast; the web UI has no way to find anything\n- **Run log pruning** — the runs directory grows unboundedly, a real operational problem on active projects\n- **Guest auto-reconnect** — a dropped connection currently requires manual re-join, undermining the distributed fleet use case\n- **MCP resources** — the SDK supports them and board state is a natural fit; spec/doc reads on every ticket run would be cheaper and subscribable",
         "✓ done · 22 turns · $0.8273"
       ]
+    },
+    {
+      "id": "l80Fr_Pe",
+      "startedAt": "2026-07-13T18:37:12.597Z",
+      "finishedAt": "2026-07-13T18:37:15.713Z",
+      "ticketsCreated": [],
+      "costUsd": 0,
+      "numTurns": 1,
+      "lines": [
+        "You've hit your session limit · resets 9:50pm (Europe/London)",
+        "✓ done · 1 turns · $0.0000"
+      ]
     }
   ]
 }

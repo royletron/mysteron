@@ -1,13 +1,14 @@
 ---
 title: Run log rotation and auto-pruning
-state: backlog
+state: ready
 priority: medium
 labels:
   - dream
   - tech-debt
   - storage
 created: '2026-07-12T18:16:19.383Z'
-updated: '2026-07-12T18:16:19.383Z'
+updated: '2026-07-14T16:27:38.445Z'
+order: 1
 ---
 
 **Gap.** `.mysteron/runs/` grows unboundedly. Every run (including subtask runs, retried runs, and dream-mode runs) writes a JSON file to this directory. On an active project this accumulates hundreds of files quickly — the current repo already has over 100 run files. Run files include full agent output which can be large.

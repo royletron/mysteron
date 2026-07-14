@@ -1,13 +1,22 @@
 ---
 title: 'MCP resources: expose board state as readable resources'
-state: backlog
+state: done
 priority: medium
+assignee: Waldorf the Compiler
 labels:
   - dream
   - feature
   - mcp
 created: '2026-07-12T18:16:46.209Z'
-updated: '2026-07-12T18:16:46.209Z'
+updated: '2026-07-14T16:27:06.724Z'
+order: 1
+subtasks:
+  - title: 'Register static resources (board, spec, memory)'
+    done: true
+  - title: 'Register resource templates (ticket/{id}, docs/{name})'
+    done: true
+  - title: Wire board-changed bus event to sendResourceListChanged
+    done: true
 ---
 
 **Gap.** The MCP server (`src/mcp/server.ts`) exposes board state exclusively through tools (`list_tickets`, `get_ticket`, etc.). MCP also supports **resources** — URI-addressable content that clients can read and subscribe to without invoking a tool. Claude Code can read MCP resources directly into its context window, which is more efficient and composable than repeated tool calls.
