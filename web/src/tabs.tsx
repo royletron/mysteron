@@ -266,9 +266,22 @@ export function BinTab({ detail, reload }: { detail: ProjectDetail; reload: () =
     reload();
   };
 
+  const removeAll = async () => {
+    if (!confirm(`Permanently delete all ${binned.length} ticket${binned.length === 1 ? "" : "s"} in the bin? This can't be undone.`)) return;
+    await Promise.all(binned.map((t) => api(`/api/projects/${projectId}/tickets/${t.id}`, { method: "DELETE" })));
+    reload();
+  };
+
   return (
     <div class="card">
-      <h2 class="text-lg font-semibold">Bin</h2>
+      <div class="flex items-center gap-3">
+        <h2 class="text-lg font-semibold">Bin</h2>
+        {binned.length > 0 && (
+          <button class="btn btn-sm btn-danger ml-auto" onClick={removeAll}>
+            🗑 Delete all
+          </button>
+        )}
+      </div>
       <p class="text-sm text-zinc-400">
         Tickets land here automatically 48 hours after they're done. Restore one to bring it back, or delete it for good.
       </p>
